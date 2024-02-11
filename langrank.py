@@ -1,4 +1,4 @@
-import lang2vec.lang2vec as l2v
+import gram2vec.lang2vec.lang2vec as l2v
 import numpy as np
 import pkg_resources
 import os
@@ -6,6 +6,7 @@ import lightgbm as lgb
 from sklearn.datasets import load_svmlight_file
 
 TASKS = ["MT","DEP","EL","POS"]
+PREFIXES = {"MT": "ted_", "DEP": "conll_", "EL":"wiki_en-", "POS": ""}
 
 
 MT_DATASETS = {
@@ -195,7 +196,116 @@ def prepare_new_dataset(lang, task="MT", dataset_source=None, dataset_target=Non
 
 	return features
 
+def prepare_featureset(lang, task="MT"):
+	features = {}
+	datasets_dict = map_task_to_data(task)
+	for dt in datasets_dict:
+		fn = pkg_resources.resource_filename(__name__, os.path.join('indexed', task, datasets_dict[dt]))
+		features = np.load(fn, encoding='latin1', allow_pickle=True).item()
+	
+	# if task != "EL":
+	# 	features["dataset_size"] = len(source_lines)
+	# 	tokens = [w for s in source_lines for w in s.strip().split()]
+	# 	features["token_number"] = len(tokens)
+	# 	types = set(tokens)
+	# 	features["type_number"] = len(types)
+	# 	features["word_vocab"] = types
+	# 	features["type_token_ratio"] = features["type_number"]/float(features["token_number"])
+	# elif task == "EL":
+	# 	features["dataset_size"] = len(source_lines)
+	# 	tokens = [w for s in source_lines for w in s.strip().split()]
+	# 	types = set(tokens)
+	# 	features["word_vocab"] = types
+
+	code = (PREFIXES[task] + lang)
+	if not code in features:
+		code = PREFIXES[task] + Lang(lang).pt1
+	if not code in features: 
+		return []
+	features = features[code]
+	# 	features["dataset_size"] = len(source_lines) # This should be be the same as above
+	# 	tokens = [w for s in source_lines for w in s.strip().split()]
+	# 	features["subword_token_number"] = len(tokens)
+	# 	types = set(tokens)
+	# 	features["subword_type_number"] = len(types)
+	# 	features["subword_vocab"] = types
+	# 	features["subword_type_token_ratio"] = features["subword_type_number"]/float(features["subword_token_number"])
+
+	return features
+
+def prepare_train_file_no_data(langs, rank, task="MT", tmp_dir="tmp", distances = True):
+	"""
+	dataset: [ted_aze, ted_tur, ted_ben] 
+	lang: [aze, tur, ben]
+	rank: [[0, 1, 2], [1, 0, 2], [1, 2, 0]]
+	"""
+	num_langs = len(langs)
+	REL_EXP_CUTOFF = num_langs - 1 - 9
+
+	if not isinstance(rank, np.ndarray):
+		rank = np.array(rank)
+	BLEU_level = -rank + len(langs)
+	rel_BLEU_level = lgbm_rel_exp(BLEU_level, REL_EXP_CUTOFF)
+	features = {lang: prepare_featureset(lang, task) for lang in langs}
+	for lang in list(features.keys()): 
+		if features[lang] == []:
+			del features[lang]
+	langs = list(features.keys())
+	if distances:
+		uriel = uriel_distance_vec(langs)
+	else:
+		uriel = uriel_feat_vec(langs)
+		
+	if not os.path.exists(tmp_dir):
+		os.mkdir(tmp_dir)
+
+	train_file = os.path.join(tmp_dir, "train.csv")
+	train_file_f = open(train_file, "w")
+	train_size = os.path.join(tmp_dir, "train_size.csv")
+	train_size_f = open(train_size, "w")
+	for i, lang1 in enumerate(langs):
+		for j, lang2 in enumerate(langs):
+			if i != j:
+				if len(langs) == 2:
+						uriel_features = [u for u in uriel] 
+				else:
+					syntax = l2v.get_feature_match_dict([lang1, lang2], "syntax_knn")
+					syntax_features =  ["{}:{}".format(u, syntax[u]) for u in syntax.keys()]
+					uriel_features = ["{}:{}".format(u, uriel[u][i, j]) for u in uriel.keys()] # gets uriel distances for each distance in uriel
+				distance_feats = distance_feat_dict(features[lang1], features[lang2], task)
+				distance_feats = ["{}:{}".format(u, distance_feats[u]) for u in distance_feats.keys()]
+				distance_vector = syntax_features + uriel_features + distance_feats
+				line = " ".join([str(rel_BLEU_level[i, j])] + distance_vector)
+				train_file_f.write(line + "\n")
+		train_size_f.write("{}\n".format(num_langs-1))
+	train_file_f.close()
+	train_size_f.close()
+	print("Dump train file to {} ...".format(train_file_f))
+	print("Dump train size file to {} ...".format(train_size_f))
+
+def uriel_feat_vec(languages): 
+	# print('...grambank')
+	# grambank = l2v.get_features(languages, "syntax_grambank")
+	print('...geographic')
+	geographic = l2v.geographic_distance(languages)
+	print('...genetic')
+	genetic = l2v.genetic_distance(languages)
+	print('...inventory')
+	inventory = l2v.inventory_distance(languages)
+	print('...phonological')
+	phonological = l2v.phonological_distance(languages)
+	print('...featural')
+	featural = l2v.featural_distance(languages)
+	uriel_features = {"genetic": genetic, 
+				   "featural": featural,
+				   "phonological" : phonological, 
+				   "inventory": inventory, 
+				   "geographic": geographic}
+	return uriel_features
+
 def uriel_distance_vec(languages):
+	# print('...grambank')
+	# grambank = l2v.grambank_distance(languages)
 	print('...geographic')
 	geographic = l2v.geographic_distance(languages)
 	print('...genetic')
@@ -212,6 +322,53 @@ def uriel_distance_vec(languages):
 	return uriel_features
 
 
+def distance_feat_dict(test, transfer, task):
+	output = []
+	# Dataset specific 
+	# Dataset Size
+	transfer_dataset_size = transfer["dataset_size"]
+	task_data_size = test["dataset_size"]
+	ratio_dataset_size = float(transfer_dataset_size)/task_data_size
+	# TTR
+	if task != "EL":
+		transfer_ttr = transfer["type_token_ratio"]
+		task_ttr = test["type_token_ratio"]
+		distance_ttr = (1 - transfer_ttr/task_ttr) ** 2
+	# Word overlap
+	if task != "EL":
+		word_overlap = float(len(set(transfer["word_vocab"]).intersection(set(test["word_vocab"])))) / (transfer["type_number"] + test["type_number"])
+	elif task == "EL":
+		word_overlap = float(len(set(transfer["word_vocab"]).intersection(set(test["word_vocab"]))))
+	# Subword overlap
+	if task == "MT":
+		subword_overlap = float(len(set(transfer["subword_vocab"]).intersection(set(test["subword_vocab"])))) / (transfer["subword_type_number"] + test["subword_type_number"])
+
+	if task == "MT":
+		data_specific_features = {
+			"word overlap": word_overlap, 
+			"subword overlap": subword_overlap,
+			"transfer_dataset_size": transfer_dataset_size,
+			"task_data_size": task_data_size,
+			"ratio_dataset_size": ratio_dataset_size,
+			"transfer_ttr": transfer_ttr, 
+			"task_ttr": task_ttr, 
+			"distance_ttr": distance_ttr}
+	elif task == "POS" or task == "DEP":
+		data_specific_features = {
+			"word overlap": word_overlap, 
+			"transfer_dataset_size": transfer_dataset_size,
+			"task_data_size": task_data_size,
+			"ratio_dataset_size": ratio_dataset_size,
+			"transfer_ttr": transfer_ttr, 
+			"task_ttr": task_ttr, 
+			"distance_ttr": distance_ttr}
+	elif task == "EL":
+			data_specific_features = {
+			"word overlap": word_overlap, 
+			"transfer_dataset_size": transfer_dataset_size,
+			"task_data_size": task_data_size,
+			"ratio_dataset_size": ratio_dataset_size}	
+	return data_specific_features
 
 def distance_vec(test, transfer, uriel_features, task):
 	output = []
@@ -308,7 +465,7 @@ def train(tmp_dir, output_model):
 	model.fit(X_train, y_train, group=np.loadtxt(train_size))
 	model.booster_.save_model(output_model)
 
-def rank(test_dataset_features, task="MT", candidates="all", model="best", print_topK=3):
+def rank(test_dataset_features, task="MT", candidates="all", model="best", print_topK=3, distances = True):
 	'''
 	test_dataset_features : the output of prepare_new_dataset(). Basically a dictionary with the necessary dataset features.
 	'''
@@ -327,7 +484,10 @@ def rank(test_dataset_features, task="MT", candidates="all", model="best", print
         
 	languages = [test_dataset_features["lang"]] + [c[1]["lang"] for c in candidate_list]
 	# TODO: This takes forever...
-	uriel = uriel_distance_vec(languages)
+	if distances:
+		uriel = uriel_distance_vec(languages)
+	else:
+		uriel = uriel_feat_vec(languages)
 
 
 	print("Collecting dataset distance vectors...")
