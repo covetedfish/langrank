@@ -1,11 +1,12 @@
 import os
+import sys
 root=os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.append(root)
 import langrank as lr
 import pickle
 import sys, getopt
 
-def predict(task, syntax_flag, ablation):
+def predict(task):
     with open("./training-data/{}_original_ranked_train_no_ties.pkl".format(task), 'rb') as f:
         rankings = pickle.load(f)
     languages = list(rankings.keys())
@@ -17,7 +18,7 @@ def predict(task, syntax_flag, ablation):
         cands = rankings[lang][0]
         cands.append(lang)
         prepared = lr.prepare_featureset(lang=lang, task = task)
-        predicted[lang] = lr.rank(task=task, candidates=cands, model = lang_path, distances = False)
+        predicted[lang] = lr.rank(test_lang = lang, task=task, candidates=cands, model = lang_path, distances = False)
     pf = "./results/{t}/predictions.pkl".format(t = task)
     print(pf)
     with open(pf, 'wb') as f:

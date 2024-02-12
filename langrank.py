@@ -495,7 +495,6 @@ def rank(test_lang, task="MT", candidates="all", model="best", print_topK=3, dis
 	test_dataset_features : the output of prepare_new_dataset(). Basically a dictionary with the necessary dataset features.
 	'''
 	# Checks
-	check_task_model(task, model)
 
 	# Get candidates to be compared against
 	print("Preparing candidate list...")
@@ -532,14 +531,9 @@ def rank(test_lang, task="MT", candidates="all", model="best", print_topK=3, dis
 		else:
 			test_data = pd.DataFrame([distance_feats])
 
-	# load model
-	print("Loading model...")
-	model_dict = map_task_to_models(task) # this loads the dict that will give us the name of the pretrained model
-	model_fname = model_dict[model] # this gives us the filename (needs to be joined, see below)
-	modelfilename = pkg_resources.resource_filename(__name__, os.path.join('pretrained', task, model_fname))
-
+	
 	# rank
-	bst = lgb.Booster(model_file=modelfilename)
+	bst = lgb.Booster(model_file=model)
 	
 	print("predicting...")
 	predict_contribs = bst.predict(distance_feats, pred_contrib=True)
