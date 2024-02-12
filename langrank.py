@@ -262,9 +262,9 @@ def prepare_train_file_no_data(langs, rank, task="MT", tmp_dir="tmp", distances 
 	scores = []
 	train_data = None
 	train_file = os.path.join(tmp_dir, "train.pkl")
-	train_file_f = open(train_file, "w")
+	train_file_f = open(train_file, "wb")
 	train_labels = os.path.join(tmp_dir, "train_labels.pkl")
-	train_labels_f = open(train_labels, "w")
+	train_labels_f = open(train_labels, "wb")
 	train_size = os.path.join(tmp_dir, "train_size.csv")
 	train_size_f = open(train_size, "w")
 	for i, lang1 in enumerate(langs):
@@ -278,10 +278,10 @@ def prepare_train_file_no_data(langs, rank, task="MT", tmp_dir="tmp", distances 
 				distance_feats = distance_feat_dict(features[lang1], features[lang2], task)
 				distance_feats.update(uriel_features)
 				distance_feats.update(syntax_features)
-				if train_data:
-					train_data = train_data.append(distance_feats, ignore_index=True)
+				if not train_data is None:
+					train_data = pd.concat([train_data, pd.DataFrame([distance_feats])], ignore_index=True)
 				else:
-					train_data = pd.DataFrame(distance_feats)
+					train_data = pd.DataFrame([distance_feats])
 				score = str(rel_BLEU_level[i, j])
 				scores.append(score)
 		train_size_f.write("{}\n".format(num_langs-1))
@@ -481,8 +481,8 @@ def train_from_pickle(tmp_dir, output_model):
 	label_file = os.path.join(tmp_dir, "train_labels.pkl")
 	train_size = os.path.join(tmp_dir, "train_size.csv")
 	labels = pickle
-	X_train = pickle.load(open(train_file, "r"))
-	y_train = pickle.load(open(label_file, "r"))
+	X_train = pickle.load(open(train_file, "rb"))
+	y_train = pickle.load(open(label_file, "rb"))
 
 	model = lgb.LGBMRanker(boosting_type='gbdt', num_leaves=16,
 						   max_depth=-1, learning_rate=0.1, n_estimators=100,
