@@ -522,7 +522,7 @@ def rank(test_lang, task="MT", candidates="all", model="best", print_topK=3, dis
 		cand_dict = c[1]
 		candidate_language = key[-3:]
 		syntax_features = l2v.get_feature_match_dict([test_lang, candidate_language], "syntax_knn")
-		uriel_features = {u: uriel[u][i, j] for u in uriel.keys()} # gets uriel distances for each distance in uriel
+		uriel_features = {u: uriel[u][0, i+1] for u in uriel.keys()} # gets uriel distances for each distance in uriel
 		distance_feats = distance_feat_dict(features[test_lang], features[candidate_language], task)
 		distance_feats.update(uriel_features)
 		distance_feats.update(syntax_features)
