@@ -11,7 +11,7 @@ def predict(task):
         rankings = pickle.load(f)
     languages = list(rankings.keys())
     predicted = {}
-    path = f"./models/uriel/{task}/"
+    path = f"./models/uriel/{task}/full/"
     for lang in languages:
         lang_path = "{path}{lang}.txt".format(path = path, lang = lang)
         print(lang_path)

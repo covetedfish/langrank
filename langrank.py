@@ -536,7 +536,7 @@ def rank(test_lang, task="MT", candidates="all", model="best", print_topK=3, dis
 	bst = lgb.Booster(model_file=model)
 	
 	print("predicting...")
-	predict_contribs = bst.predict(distance_feats, pred_contrib=True)
+	predict_contribs = bst.predict(test_data, pred_contrib=True)
 	predict_scores = predict_contribs.sum(-1)
 	
 
@@ -561,7 +561,7 @@ def rank(test_lang, task="MT", candidates="all", model="best", print_topK=3, dis
 		feature_name = ["Entity overlap", "Transfer lang dataset size", "Target lang dataset size", 
 						"Transfer over target size ratio", "GENETIC", "SYNTACTIC", "FEATURAL", "PHONOLOGICAL", 
 						"INVENTORY", "GEOGRAPHIC"]
-
+	ind = list(np.argsort(-predict_scores))
 	if return_langs:
 		return [candidate_list[i][1]["lang"] for j,i in enumerate(ind)]
 	
