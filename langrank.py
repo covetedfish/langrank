@@ -503,8 +503,8 @@ def rank(test_lang, task="MT", candidates="all", model="best", print_topK=3, dis
 	else:
 		# Restricts to a specific set of languages
 		candidate_list = get_candidates(task, candidates)
-
-	features = {lang: prepare_featureset(lang, task) for lang in candidate_list}
+	cand_langs =  [c[1]["lang"] for c in candidate_list]
+	features = {lang: prepare_featureset(lang, task) for lang in cand_langs}
 	print("Collecting URIEL distance vectors...")
 	languages = [test_lang] + [c[1]["lang"] for c in candidate_list]
 	# TODO: This takes forever...
