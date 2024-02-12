@@ -480,7 +480,6 @@ def train_from_pickle(tmp_dir, output_model):
 	train_file = os.path.join(tmp_dir, "train.pkl")
 	label_file = os.path.join(tmp_dir, "train_labels.pkl")
 	train_size = os.path.join(tmp_dir, "train_size.csv")
-	labels = pickle
 	X_train = pickle.load(open(train_file, "rb"))
 	y_train = pickle.load(open(label_file, "rb"))
 
@@ -491,7 +490,7 @@ def train_from_pickle(tmp_dir, output_model):
 	model.booster_.save_model(output_model)
 
 
-def rank(test_dataset_features, task="MT", candidates="all", model="best", print_topK=3, distances = True):
+def rank(test_lang, task="MT", candidates="all", model="best", print_topK=3, distances = True, return_langs = True):
 	'''
 	test_dataset_features : the output of prepare_new_dataset(). Basically a dictionary with the necessary dataset features.
 	'''
@@ -506,9 +505,9 @@ def rank(test_dataset_features, task="MT", candidates="all", model="best", print
 		# Restricts to a specific set of languages
 		candidate_list = get_candidates(task, candidates)
 
+	features = {lang: prepare_featureset(lang, task) for lang in candidate_list}
 	print("Collecting URIEL distance vectors...")
-        
-	languages = [test_dataset_features["lang"]] + [c[1]["lang"] for c in candidate_list]
+	languages = [test_lang] + [c[1]["lang"] for c in candidate_list]
 	# TODO: This takes forever...
 	if distances:
 		uriel = uriel_distance_vec(languages)
@@ -518,13 +517,20 @@ def rank(test_dataset_features, task="MT", candidates="all", model="best", print
 
 	print("Collecting dataset distance vectors...")
 	test_inputs = []
+	test_data = None
 	for i,c in enumerate(candidate_list):
 		key = c[0]
 		cand_dict = c[1]
 		candidate_language = key[-3:]
-		uriel_j = [u[0,i+1] for u in uriel]
-		distance_vector = distance_vec(test_dataset_features, cand_dict, uriel_j, task)
-		test_inputs.append(distance_vector)
+		syntax_features = l2v.get_feature_match_dict([test_lang, candidate_language], "syntax_knn")
+		uriel_features = {u: uriel[u][i, j] for u in uriel.keys()} # gets uriel distances for each distance in uriel
+		distance_feats = distance_feat_dict(features[test_lang], features[candidate_language], task)
+		distance_feats.update(uriel_features)
+		distance_feats.update(syntax_features)
+		if not test_data is None:
+			train_data = pd.concat([train_data, pd.DataFrame([distance_feats])], ignore_index=True)
+		else:
+			test_data = pd.DataFrame([distance_feats])
 
 	# load model
 	print("Loading model...")
@@ -536,7 +542,7 @@ def rank(test_dataset_features, task="MT", candidates="all", model="best", print
 	bst = lgb.Booster(model_file=modelfilename)
 	
 	print("predicting...")
-	predict_contribs = bst.predict(test_inputs, pred_contrib=True)
+	predict_contribs = bst.predict(distance_feats, pred_contrib=True)
 	predict_scores = predict_contribs.sum(-1)
 	
 
@@ -562,6 +568,9 @@ def rank(test_dataset_features, task="MT", candidates="all", model="best", print
 						"Transfer over target size ratio", "GENETIC", "SYNTACTIC", "FEATURAL", "PHONOLOGICAL", 
 						"INVENTORY", "GEOGRAPHIC"]
 
+	if return_langs:
+		return [candidate_list[i][1]["lang"] for j,i in enumerate(ind)]
+	
 	test_inputs = np.array(test_inputs)
 	for j in range(len(feature_name)):
 		if sort_sign_list[j] != 0:
