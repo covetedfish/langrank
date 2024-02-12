@@ -4,7 +4,8 @@ import pkg_resources
 import os
 import lightgbm as lgb
 from sklearn.datasets import load_svmlight_file
-
+import pandas as pd
+import pickle
 TASKS = ["MT","DEP","EL","POS"]
 PREFIXES = {"MT": "ted_", "DEP": "conll_", "EL":"wiki_en-", "POS": ""}
 
@@ -258,9 +259,12 @@ def prepare_train_file_no_data(langs, rank, task="MT", tmp_dir="tmp", distances 
 		
 	if not os.path.exists(tmp_dir):
 		os.mkdir(tmp_dir)
-
-	train_file = os.path.join(tmp_dir, "train.csv")
+	scores = []
+	train_data = None
+	train_file = os.path.join(tmp_dir, "train.pkl")
 	train_file_f = open(train_file, "w")
+	train_labels = os.path.join(tmp_dir, "train_labels.pkl")
+	train_labels_f = open(train_labels, "w")
 	train_size = os.path.join(tmp_dir, "train_size.csv")
 	train_size_f = open(train_size, "w")
 	for i, lang1 in enumerate(langs):
@@ -269,15 +273,20 @@ def prepare_train_file_no_data(langs, rank, task="MT", tmp_dir="tmp", distances 
 				if len(langs) == 2:
 						uriel_features = [u for u in uriel] 
 				else:
-					syntax = l2v.get_feature_match_dict([lang1, lang2], "syntax_knn")
-					syntax_features =  ["{}:{}".format(u, syntax[u]) for u in syntax.keys()]
-					uriel_features = ["{}:{}".format(u, uriel[u][i, j]) for u in uriel.keys()] # gets uriel distances for each distance in uriel
+					syntax_features = l2v.get_feature_match_dict([lang1, lang2], "syntax_knn")
+					uriel_features = {u: uriel[u][i, j] for u in uriel.keys()} # gets uriel distances for each distance in uriel
 				distance_feats = distance_feat_dict(features[lang1], features[lang2], task)
-				distance_feats = ["{}:{}".format(u, distance_feats[u]) for u in distance_feats.keys()]
-				distance_vector = syntax_features + uriel_features + distance_feats
-				line = " ".join([str(rel_BLEU_level[i, j])] + distance_vector)
-				train_file_f.write(line + "\n")
+				distance_feats.update(uriel_features)
+				distance_feats.update(syntax_features)
+				if train_data:
+					train_data = train_data.append(distance_feats, ignore_index=True)
+				else:
+					train_data = pd.DataFrame(distance_feats)
+				score = str(rel_BLEU_level[i, j])
+				scores.append(score)
 		train_size_f.write("{}\n".format(num_langs-1))
+	pickle.dump(train_data, train_file_f)
+	pickle.dump(scores, train_labels_f)
 	train_file_f.close()
 	train_size_f.close()
 	print("Dump train file to {} ...".format(train_file_f))
@@ -464,6 +473,23 @@ def train(tmp_dir, output_model):
 						   min_child_samples=5)
 	model.fit(X_train, y_train, group=np.loadtxt(train_size))
 	model.booster_.save_model(output_model)
+
+
+
+def train_from_pickle(tmp_dir, output_model):
+	train_file = os.path.join(tmp_dir, "train.pkl")
+	label_file = os.path.join(tmp_dir, "train_labels.pkl")
+	train_size = os.path.join(tmp_dir, "train_size.csv")
+	labels = pickle
+	X_train = pickle.load(open(train_file, "r"))
+	y_train = pickle.load(open(label_file, "r"))
+
+	model = lgb.LGBMRanker(boosting_type='gbdt', num_leaves=16,
+						   max_depth=-1, learning_rate=0.1, n_estimators=100,
+						   min_child_samples=5)
+	model.fit(X_train, y_train, group=np.loadtxt(train_size))
+	model.booster_.save_model(output_model)
+
 
 def rank(test_dataset_features, task="MT", candidates="all", model="best", print_topK=3, distances = True):
 	'''

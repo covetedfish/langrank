@@ -3,14 +3,14 @@ import sys, getopt
 import os, sys
 root=os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.append(root)
-from langrank import prepare_train_file_no_data, train
+from langrank import prepare_train_file_no_data, train_from_pickle
 import pickle 
 
 
 def train_one(dir_path, task, langs, rank, test_lang):
     prepare_train_file_no_data(langs=langs, rank=rank, tmp_dir=dir_path, task = task, distances = False)
     output_model = "{}/{}.txt".format(dir_path,test_lang)
-    train(tmp_dir= dir_path, output_model=output_model)
+    train_from_pickle(tmp_dir= dir_path, output_model=output_model)
     assert os.path.isfile(output_model)
 
 
