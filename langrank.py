@@ -527,7 +527,7 @@ def rank(test_lang, task="MT", candidates="all", model="best", print_topK=3, dis
 		distance_feats.update(uriel_features)
 		distance_feats.update(syntax_features)
 		if not test_data is None:
-			train_data = pd.concat([train_data, pd.DataFrame([distance_feats])], ignore_index=True)
+			test_data = pd.concat([test_data, pd.DataFrame([distance_feats])], ignore_index=True)
 		else:
 			test_data = pd.DataFrame([distance_feats])
 
