@@ -227,13 +227,13 @@ def prepare_featureset(lang, task="MT"):
 		return []
 	features = features[code]
 
-	# 	features["dataset_size"] = len(source_lines) # This should be be the same as above
-	# 	tokens = [w for s in source_lines for w in s.strip().split()]
-	# 	features["subword_token_number"] = len(tokens)
-	# 	types = set(tokens)
-	# 	features["subword_type_number"] = len(types)
-	# 	features["subword_vocab"] = types
-	# 	features["subword_type_token_ratio"] = features["subword_type_number"]/float(features["subword_token_number"])
+	features["dataset_size"] = len(source_lines) # This should be be the same as above
+	tokens = [w for s in source_lines for w in s.strip().split()]
+	features["subword_token_number"] = len(tokens)
+	types = set(tokens)
+	features["subword_type_number"] = len(types)
+	features["subword_vocab"] = types
+	features["subword_type_token_ratio"] = features["subword_type_number"]/float(features["subword_token_number"])
 
 	return features
 
