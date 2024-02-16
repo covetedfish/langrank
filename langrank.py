@@ -547,7 +547,7 @@ def train(tmp_dir, output_model):
 	model.booster_.save_model(output_model)
 
 
-def rank(test_lang, task="MT", candidates="all", model="best", print_topK=3, distances = True, return_langs = True):
+def rank(test_dataset_features, test_lang, task="MT", candidates="all", model="best", print_topK=3, distances = True, return_langs = True):
 	'''
 	test_dataset_features : the output of prepare_new_dataset(). Basically a dictionary with the necessary dataset features.
 	'''
@@ -569,31 +569,44 @@ def rank(test_lang, task="MT", candidates="all", model="best", print_topK=3, dis
 		uriel = uriel_distance_vec(languages)
 	else:
 		uriel = uriel_feat_vec(languages)
-
-
 	print("Collecting dataset distance vectors...")
-	test_inputs = []
-	test_data = None
-	for i,c in enumerate(candidate_list):
-		key = c[0]
-		cand_dict = c[1]
-		candidate_language = key[-3:]
-		syntax_features = l2v.get_feature_match_dict([test_lang, candidate_language], "syntax_knn")
-		uriel_features = {u: uriel[u][0, i+1] for u in uriel.keys()} # gets uriel distances for each distance in uriel
-		distance_feats = distance_feat_dict(features[test_lang], features[candidate_language], task)
-		distance_feats.update(uriel_features)
-		distance_feats.update(syntax_features)
-		if not test_data is None:
-			test_data = pd.concat([test_data, pd.DataFrame([distance_feats])], ignore_index=True)
-		else:
-			test_data = pd.DataFrame([distance_feats])
+
+	if distances:
+		test_inputs = []
+		for i,c in enumerate(candidate_list):
+			key = c[0]
+			cand_dict = c[1]
+			candidate_language = key[-3:]
+			uriel_j = [u[0,i+1] for u in uriel]
+			distance_vector = distance_vec(test_dataset_features, cand_dict, uriel_j, task) #what does this actually return?
+			test_inputs.append(distance_vector)
+	else:
+		print("Collecting dataset distance vectors...")
+		test_inputs = []
+		test_data = None
+		for i,c in enumerate(candidate_list):
+			key = c[0]
+			cand_dict = c[1]
+			candidate_language = key[-3:]
+			syntax_features = l2v.get_feature_match_dict([test_lang, candidate_language], "syntax_knn")
+			uriel_features = {u: uriel[u][0, i+1] for u in uriel.keys()} # gets uriel distances for each distance in uriel
+			distance_feats = distance_feat_dict(features[test_lang], features[candidate_language], task)
+			distance_feats.update(uriel_features)
+			distance_feats.update(syntax_features)
+			if not test_data is None:
+				test_data = pd.concat([test_data, pd.DataFrame([distance_feats])], ignore_index=True)
+			else:
+				test_data = pd.DataFrame([distance_feats])
 
 	
 	# rank
 	bst = lgb.Booster(model_file=model)
 	
 	print("predicting...")
-	predict_contribs = bst.predict(test_data, pred_contrib=True)
+	if distances:
+		predict_contribs = bst.predict(test_inputs, pred_contrib=True)
+	else:
+		predict_contribs = bst.predict(test_data, pred_contrib=True)
 	predict_scores = predict_contribs.sum(-1)
 	
 
