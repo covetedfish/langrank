@@ -6,6 +6,8 @@ import lightgbm as lgb
 from sklearn.datasets import load_svmlight_file
 import pandas as pd
 import pickle
+from iso639 import Lang
+
 TASKS = ["MT","DEP","EL","POS"]
 PREFIXES = {"MT": "ted_", "DEP": "conll_", "EL":"wiki_en-", "POS": ""}
 
