@@ -9,7 +9,7 @@ import pickle
 from iso639 import Lang
 
 TASKS = ["MT","DEP","EL","POS"]
-PREFIXES = {"MT": "ted_", "DEP": "conll_", "EL":"wiki_en-", "POS": ""}
+PREFIXES = {"MT": "ted_", "DEP": "conll_", "EL":"wiki_en-", "POS": "datasets/pos/"}
 
 
 MT_DATASETS = {
@@ -223,6 +223,10 @@ def prepare_featureset(lang, task="MT"):
 	code = (PREFIXES[task] + lang)
 	if not code in features:
 		code = PREFIXES[task] + Lang(lang).pt1
+	elif task == "POS":
+		code = [a.startswith[PREFIXES[task] + Lang(lang).pt1] for a in list(features.keys())]
+		if len(code) > 0:
+			code = code[0]
 	if not code in features: 
 		return []
 	features = features[code]
