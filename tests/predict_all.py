@@ -21,7 +21,7 @@ def predict(task, dist):
         cands = rankings[lang][0]
         cands.append(lang)
         prepared = lr.prepare_featureset(lang=lang, task = task)
-        predicted[lang] = lr.rank(test_lang = lang, task=task, candidates=cands, model = lang_path, distances = dist)
+        predicted[lang] = lr.rank(predicted, test_lang = lang, task=task, candidates=cands, model = lang_path, distances = dist)
     if dist:
         pf = "./results/{t}/dist/predictions.pkl".format(t = task)
     else:
