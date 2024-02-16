@@ -245,6 +245,7 @@ def prepare_train_pickle_no_data(langs, rank, task="MT", tmp_dir="tmp", distance
 	rank: [[0, 1, 2], [1, 0, 2], [1, 2, 0]]
 	"""
 	num_langs = len(langs)
+	print(f"number of languages: {num_langs}")
 	REL_EXP_CUTOFF = num_langs - 1 - 9
 
 	if not isinstance(rank, np.ndarray):
@@ -256,6 +257,7 @@ def prepare_train_pickle_no_data(langs, rank, task="MT", tmp_dir="tmp", distance
 		if features[lang] == []:
 			del features[lang]
 	langs = list(features.keys())
+	print(f"if this is empty, the problem is the featureset: {langs}")
 	if distances:
 		uriel = uriel_distance_vec(langs)
 	else:
@@ -273,10 +275,12 @@ def prepare_train_pickle_no_data(langs, rank, task="MT", tmp_dir="tmp", distance
 	train_size_f = open(train_size, "w")
 	for i, lang1 in enumerate(langs):
 		for j, lang2 in enumerate(langs):
+			print("langs check out")
 			if i != j:
 				if len(langs) == 2:
 						uriel_features = [u for u in uriel] 
 				else:
+					print("getting type feats")
 					syntax_features = l2v.get_feature_match_dict([lang1, lang2], "syntax_knn")
 					uriel_features = {u: uriel[u][i, j] for u in uriel.keys()} # gets uriel distances for each distance in uriel
 				distance_feats = distance_feat_dict(features[lang1], features[lang2], task)

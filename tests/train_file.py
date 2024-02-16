@@ -8,12 +8,14 @@ import pickle
 
 
 def train_one_distanceless(dir_path, task, langs, rank, test_lang):
+    print(langs)
     prepare_train_pickle_no_data(langs=langs, rank=rank, tmp_dir=dir_path, task = task, distances = False)
     output_model = "{}/{}.txt".format(dir_path,test_lang)
     train_from_pickle(tmp_dir= dir_path, output_model=output_model)
     assert os.path.isfile(output_model)
 
 def train_one_distances(dir_path, task, langs, rank, test_lang):
+    print(langs)
     prepare_train_file_no_data(langs=langs, rank=rank, tmp_dir=dir_path, task = task)
     output_model = "{}/{}.txt".format(dir_path,test_lang)
     train(tmp_dir= dir_path, output_model=output_model)
