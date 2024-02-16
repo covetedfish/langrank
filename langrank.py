@@ -224,6 +224,7 @@ def prepare_featureset(lang, task="MT"):
 	if not code in features: 
 		return []
 	features = features[code]
+
 	# 	features["dataset_size"] = len(source_lines) # This should be be the same as above
 	# 	tokens = [w for s in source_lines for w in s.strip().split()]
 	# 	features["subword_token_number"] = len(tokens)
