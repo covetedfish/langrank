@@ -44,7 +44,7 @@ def main(argv):
     with open(t_file, 'rb') as f:
         training= pickle.load(f)
     if dist:
-        model_dir = "./models/{source}/{task}/dist".format(task = task, source)
+        model_dir = "./models/{source}/{task}/dist".format(task = task, source = source)
     else: 
         model_dir = "./models/{source}/{task}/full".format(task = task, source = source)
 
