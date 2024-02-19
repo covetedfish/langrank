@@ -4,8 +4,8 @@
 #SBATCH --ntasks-per-node=4			# Number of requested cores
 #SBATCH --qos=preemptable
 #SBATCH --constraint="Tesla"
-#SBATCH --out=logs/train_gram.%j.out		# Output file name
-#SBATCH --error=logs/train_gram.%j.err
+#SBATCH --out=logs/train_gram_ablations.%j.out		# Output file name
+#SBATCH --error=logs/train_gram_ablations.%j.err
 
 # purge all existing modules
 module purge
