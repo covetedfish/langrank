@@ -279,7 +279,6 @@ def prepare_train_pickle_no_data(langs, rank, task="MT", tmp_dir="tmp", distance
 	train_size_f = open(train_size, "w")
 	for i, lang1 in enumerate(langs):
 		for j, lang2 in enumerate(langs):
-			print("langs check out")
 			if i != j:
 				if len(langs) == 2:
 					uriel_features = [u for u in uriel] 
