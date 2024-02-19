@@ -9,9 +9,9 @@ import pickle
 # def read_ablations_dictionary(path):
     
 
-def train_one_distanceless(dir_path, task, langs, rank, test_lang):
+def train_one_distanceless(dir_path, task, langs, rank, test_lang, source):
     print(langs)
-    prepare_train_pickle_no_data(langs=langs, rank=rank, tmp_dir=dir_path, task = task, distances = False)
+    prepare_train_pickle_no_data(langs=langs, rank=rank, tmp_dir=dir_path, task = task, distances = False, source = source)
     output_model = "{}/{}.txt".format(dir_path,test_lang)
     train_from_pickle(tmp_dir= dir_path, output_model=output_model)
     assert os.path.isfile(output_model)
@@ -27,12 +27,16 @@ def main(argv):
  
     task = ''
     dist = False
-    opts, args = getopt.getopt(argv,"t:d",["task", "distances"])
+    source = "syntax_knn"
+    opts, args = getopt.getopt(argv,"t:dg",["task", "distances", "grambank"])
     for opt, arg in opts:
       if opt in ("-t", "--task"):
-         task = arg
+        task = arg
     if opt in ("-d", "--distances"):
-         dist = True
+        dist = True
+    if opt in ("-g", "--grambank"):
+        source =  "syntax_grambank"
+
 
     t_file = "./training-data/{task}_gram_ranked_train_no_ties.pkl".format(task = task)
     print(t_file)
@@ -40,9 +44,9 @@ def main(argv):
     with open(t_file, 'rb') as f:
         training= pickle.load(f)
     if dist:
-        model_dir = "./models/uriel-gram/{task}/dist".format(task = task)
+        model_dir = "./models/{source}/{task}/dist".format(task = task, source)
     else: 
-        model_dir = "./models/uriel-gram/{task}/full".format(task = task)
+        model_dir = "./models/{source}/{task}/full".format(task = task, source = source)
 
     model_langs = list(training.keys())
     for lang in model_langs:
@@ -52,7 +56,7 @@ def main(argv):
         if dist:
             train_one_distances(model_dir, task, languages, rank, lang)
         else:
-            train_one_distanceless(model_dir, task, languages, rank, lang)
+            train_one_distanceless(model_dir, task, languages, rank, lang, source)
     
     print("finished training {task}".format(task = task))
 

@@ -4,9 +4,8 @@
 #SBATCH --ntasks-per-node=4			# Number of requested cores
 #SBATCH --qos=preemptable
 #SBATCH --constraint="Tesla"
-#SBATCH --out=logs/train_uriel-gram.%j.out		# Output file name
-#SBATCH --error=logs/train_uriel-gram.%j.err
-#SBATCH --mail-user=enri8153@colorado.edu
+#SBATCH --out=logs/train_gram.%j.out		# Output file name
+#SBATCH --error=logs/train_gram.%j.err
 
 # purge all existing modules
 module purge
@@ -19,5 +18,6 @@ module load anaconda
 conda activate bankrank
 cd "/projects/enri8153/langrank/"
 
-python3 ./tests/train_file.py -t "DEP"
-python3 ./tests/train_file.py -t "DEP" -d
+
+python3 ./tests/train_file.py -t "MT" -g
+python3 ./tests/train_file.py -t "DEP" -g
