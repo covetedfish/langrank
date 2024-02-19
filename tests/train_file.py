@@ -6,6 +6,8 @@ sys.path.append(root)
 from langrank import prepare_train_file_no_data, train_from_pickle, prepare_train_pickle_no_data, train
 import pickle 
 
+# def read_ablations_dictionary(path):
+    
 
 def train_one_distanceless(dir_path, task, langs, rank, test_lang):
     prepare_train_pickle_no_data(langs=langs, rank=rank, tmp_dir=dir_path, task = task, distances = False)
@@ -30,7 +32,7 @@ def main(argv):
     if opt in ("-d", "--distances"):
          dist = True
 
-    t_file = "./training-data/{task}_original_ranked_train_no_ties.pkl".format(task = task)
+    t_file = "./training-data/{task}_gram_ranked_train_no_ties.pkl".format(task = task)
     print(t_file)
                                                             
     with open(t_file, 'rb') as f:
