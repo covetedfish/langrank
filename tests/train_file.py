@@ -38,9 +38,9 @@ def main(argv):
     with open(t_file, 'rb') as f:
         training= pickle.load(f)
     if dist:
-        model_dir = "./models/uriel/{task}/dist".format(task = task)
+        model_dir = "./models/uriel-gram/{task}/dist".format(task = task)
     else: 
-        model_dir = "./models/uriel/{task}/full".format(task = task)
+        model_dir = "./models/uriel-gram/{task}/full".format(task = task)
 
     model_langs = list(training.keys())
     for lang in model_langs:
