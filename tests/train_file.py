@@ -6,6 +6,8 @@ sys.path.append(root)
 from langrank import prepare_train_file_no_data, train_from_pickle, prepare_train_pickle_no_data, train
 import pickle 
 
+# def read_ablations_dictionary(path):
+    
 
 def train_one_distanceless(dir_path, task, langs, rank, test_lang):
     print(langs)
@@ -32,15 +34,15 @@ def main(argv):
     if opt in ("-d", "--distances"):
          dist = True
 
-    t_file = "./training-data/{task}_original_ranked_train_no_ties.pkl".format(task = task)
+    t_file = "./training-data/{task}_gram_ranked_train_no_ties.pkl".format(task = task)
     print(t_file)
                                                             
     with open(t_file, 'rb') as f:
         training= pickle.load(f)
     if dist:
-        model_dir = "./models/uriel/{task}/dist".format(task = task)
+        model_dir = "./models/uriel-gram/{task}/dist".format(task = task)
     else: 
-        model_dir = "./models/uriel/{task}/full".format(task = task)
+        model_dir = "./models/uriel-gram/{task}/full".format(task = task)
 
     model_langs = list(training.keys())
     for lang in model_langs:

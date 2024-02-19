@@ -224,7 +224,7 @@ def prepare_featureset(lang, task="MT"):
 	if not code in features:
 		code = PREFIXES[task] + Lang(lang).pt1
 	elif task == "POS":
-		code = [a.startswith[PREFIXES[task] + Lang(lang).pt1] for a in list(features.keys())]
+		code = [a.startswith(PREFIXES[task] + Lang(lang).pt1) for a in list(features.keys())]
 		if len(code) > 0:
 			code = code[0]
 	if not code in features: 
@@ -242,7 +242,7 @@ def prepare_featureset(lang, task="MT"):
 	return features
 
 #assumes that every language we are ranking is one of the test languages (seems to be no way to incorporate a second index so why are there more ranking languages than test languages in the gold data)
-def prepare_train_pickle_no_data(langs, rank, task="MT", tmp_dir="tmp", distances = True):
+def prepare_train_pickle_no_data(langs, rank, task="MT", tmp_dir="tmp", distances = True, exclude = []):
 	"""
 	dataset: [ted_aze, ted_tur, ted_ben] 
 	lang: [aze, tur, ben]
@@ -282,10 +282,9 @@ def prepare_train_pickle_no_data(langs, rank, task="MT", tmp_dir="tmp", distance
 			print("langs check out")
 			if i != j:
 				if len(langs) == 2:
-						uriel_features = [u for u in uriel] 
+					uriel_features = [u for u in uriel] 
 				else:
-					print("getting type feats")
-					syntax_features = l2v.get_feature_match_dict([lang1, lang2], "syntax_knn")
+					syntax_features = l2v.get_feature_match_dict([lang1, lang2], "syntax_knn", exclude)
 					uriel_features = {u: uriel[u][i, j] for u in uriel.keys()} # gets uriel distances for each distance in uriel
 				distance_feats = distance_feat_dict(features[lang1], features[lang2], task)
 				distance_feats.update(uriel_features)
