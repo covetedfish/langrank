@@ -20,4 +20,6 @@ cd "/projects/enri8153/langrank/"
 
 
 python3 ./tests/train_file.py -t "MT" -g
+python3 ./tests/train_file.py -t "MT"
 python3 ./tests/train_file.py -t "DEP" -g
+python ./tests/train_file.py -t "DEP"

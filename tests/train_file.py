@@ -14,12 +14,18 @@ def read_ablations_dictionary(path, source):
     else:
         key = "Uriel"
     a = pd.read_csv(open(path, 'rb'))
-    categories = list(a["Categories"])
+    categories = list(a["Categories"])[:-2]
     cat_dict = {}
     for cat in categories:
+        print(cat)
+        if cat in ["quantification", "non-verbal predication", "argument marking (non-core)", "valency", "verb complex"] and source == "syntax_knn":
+                continue
         feats = list(a[key][a.loc[a["Categories"] == cat].index])[0].split(",")
-        feats = [s.translate(str.maketrans('', '', string.punctuation)).strip() for s in feats]
+        pattern = r'[^\w\s]|_'
+    # Use re.sub() to replace all matches of the pattern with an empty string
+        feats  = [re.sub(pattern, '', s) for s in feats]
         cat_dict[cat] = feats
+    return cat_dict
 
 def train_one_distanceless(dir_path, task, langs, rank, test_lang, source, exclude):
     print(langs)
@@ -44,9 +50,9 @@ def main(argv):
     for opt, arg in opts:
       if opt in ("-t", "--task"):
         task = arg
-    if opt in ("-d", "--distances"):
+      if opt in ("-d", "--distances"):
         dist = True
-    if opt in ("-g", "--grambank"):
+      if opt in ("-g", "--grambank"):
         source =  "syntax_grambank"
 
 
@@ -59,6 +65,7 @@ def main(argv):
     ab = read_ablations_dictionary(PATH, source)
 
     for key in list(ab.keys()):
+        print(key)
         exclude = ab[key]
         model_dir = "./models/{source}/{task}/{key}".format(task = task, source = source, key = key)
         if not os.path.exists(model_dir): 
