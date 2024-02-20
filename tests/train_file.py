@@ -6,7 +6,8 @@ sys.path.append(root)
 from langrank import prepare_train_file_no_data, train_from_pickle, prepare_train_pickle_no_data, train
 import pickle 
 import pandas as pd
-import string
+import re
+
 PATH = "./resources/fine_categorization.csv"
 def read_ablations_dictionary(path, source):
     if source == "syntax_grambank":
