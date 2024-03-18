@@ -109,7 +109,7 @@ def get_candidates(task, languages=None):
 		d = np.load(fn, encoding='latin1', allow_pickle=True).item()
 		cands += [(key,d[key]) for key in d if key != "eng"]
 	# Possibly restrict to a subset of candidate languages
-	if languages is not None and task == "MT":
+	if languages is not None:
 		add_languages = []
 		sub_languages = []
 		for l in languages:
@@ -121,9 +121,9 @@ def get_candidates(task, languages=None):
 		# Keep a candidate if it matches the languages
 		# -aze indicates all except aze
 		if len(add_languages) > 0:
-			new_cands = [c for c in cands if c[0][-3:] in add_languages and c[0][-3] not in sub_languages]
+			new_cands = [c for c in cands if c[1]["lang"] in add_languages and c[1]["lang"] not in sub_languages]
 		else:
-			new_cands = [c for c in cands if c[0][-3:] not in sub_languages]
+			new_cands = [c for c in cands if c[1]["lang"] not in sub_languages]
 		return new_cands
 
 	return cands
@@ -223,12 +223,13 @@ def prepare_featureset(lang, task="MT"):
 	code = (PREFIXES[task] + lang)
 	if not code in features:
 		code = PREFIXES[task] + Lang(lang).pt1
-	elif task == "POS":
-		code = [a.startswith(PREFIXES[task] + Lang(lang).pt1) for a in list(features.keys())]
+	if task == "POS":
+		code = [a for a in list(features.keys()) if a.startswith(PREFIXES["POS"] + Lang(lang).pt1)]
 		if len(code) > 0:
 			code = code[0]
-	if not code in features: 
+	if not code in features or code == []: 
 		return []
+	print(code)
 	features = features[code]
 
 	# features["dataset_size"] = len(source_lines) # This should be be the same as above
@@ -441,6 +442,7 @@ def prepare_train_file_no_data(langs, rank, task="MT", tmp_dir="tmp"):
 	features = {lang: prepare_featureset(lang, task) for lang in langs}
 	for lang in list(features.keys()): #stupid ass POS target languages aren't in the data??????
 		if features[lang] == []:
+			print(f"deleting {lang}")
 			del features[lang]
 	langs = list(features.keys())
 	uriel = uriel_distance_vec(langs)
@@ -553,7 +555,7 @@ def train(tmp_dir, output_model):
 	model.booster_.save_model(output_model)
 
 
-def rank(test_dataset_features, test_lang, task="MT", candidates="all", model="best", print_topK=3, distances = True, exclude = [], source = "syntax_knn" return_langs = True):
+def rank(test_dataset_features, test_lang, task="MT", candidates="all", model="best", print_topK=3, distances = True, exclude = [], source = "syntax_knn", return_langs = True):
 	'''
 	test_dataset_features : the output of prepare_new_dataset(). Basically a dictionary with the necessary dataset features.
 	'''
@@ -566,8 +568,7 @@ def rank(test_dataset_features, test_lang, task="MT", candidates="all", model="b
 	else:
 		# Restricts to a specific set of languages
 		candidate_list = get_candidates(task, candidates)
-	cand_langs =  [c[1]["lang"] for c in candidate_list]
-	features = {lang: prepare_featureset(lang, task) for lang in cand_langs}
+	features = {cand[1]['lang']: cand[1] for cand in candidate_list }
 	print("Collecting URIEL distance vectors...")
 	languages = [test_lang] + [c[1]["lang"] for c in candidate_list]
 	# TODO: This takes forever...

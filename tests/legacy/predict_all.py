@@ -8,8 +8,7 @@ import sys, getopt
 import pandas as pd
 import re
 
-PATH = "./resources/fine_categorization.csv"
-def read_ablations_dictionary(path, source):
+def read_ablations_dictionary(source, path = defaults.ABLATIONS_PATH):
     if source == "syntax_grambank":
         key = "Grambank"
     else:
@@ -29,15 +28,12 @@ def read_ablations_dictionary(path, source):
     return cat_dict
 
 
-def predict(task, dist, source, exclude):
-    with open("./training-data/{}_gram_ranked_train_no_ties.pkl".format(task), 'rb') as f:
+def predict(predict_dir, task, dist, source, exclude):
+    with open(defaults.TRAIN_FILE.format(task), 'rb') as f:
         rankings = pickle.load(f)
     languages = list(rankings.keys())
     predicted = {}
-    if dist:
-        path = f"./models/uriel-gram/{task}/dist/"
-    else:
-        path = f"./models/uriel-gram/{task}/full/"
+    model_path = predict_dir.replace("./results/", "./models/" )
     for lang in languages:
         lang_path = "{path}{lang}.txt".format(path = path, lang = lang)
         print(lang_path)
@@ -45,30 +41,35 @@ def predict(task, dist, source, exclude):
         cands.append(lang)
         prepared = lr.prepare_featureset(lang=lang, task = task)
         predicted[lang] = lr.rank(prepared, test_lang = lang, task=task, candidates=cands, model = lang_path, distances = dist, source = source, exclude = exclude)
-    if dist:
-        pf = "./results/{t}/{source}/dist/predictions.pkl".format(t = task, source = source)
-    else:
-        pf = "./results/{t}/{source}/full/predictions.pkl".format(t = task, source = source)
+    pf = predict_dir + "predictions.pkl"
     print(pf)
     with open(pf, 'wb') as f:
         pickle.dump(predicted, f)
 
-def main(argv):
-   #need to create dictionary with leave one out 
-    task = ''
-    dist = False
-    source = "syntax_knn"
-    exclude = []
-    opts, args = getopt.getopt(argv,"t:dga",["task", "distance", "grambank"])
-    for opt, arg in opts:
-      if opt in ("-t", "--task"):
-         task = arg
-      if opt in ("-d", "--distance"):
-         dist = True
-      if opt in ("-g", "--grambank"):
-        source =  "syntax_grambank"
 
-    predict(task, dist, source, exclude)
+
+@click command()
+@click.option("-t", "--task", type=str, default="MT", help="NLP task")
+@click.option("-a", "--ablation", type=str, default= "", help="feature set to remove")
+@click.option("-d", "--distance", type=bool, default= "False", help="feature set to remove")
+@click.option("-s", "--source", type=str, default= "syntax_knn", help="syntax_knn or syntax_grambank")
+
+def main(
+    task,
+    key,
+    distance,
+    source
+):
+    ab = read_ablations_dictionary(source)
+    if key:
+        print(key)
+        exclude = ab[key]
+    else:
+        key = "dist" if distance else "full"
+    predict_dir = "./results/" + defaults.FILE_EXTENSION.format(task = task, source = source, key = key)
+    if not os.path.exists(predict_dir): 
+            os.makedirs(predict_dir) 
+    predict(task, dist, source, exclude, predict_dir)
 
     print("finished predicting {task}".format(task = task))
   
