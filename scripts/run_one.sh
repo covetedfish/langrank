@@ -8,8 +8,8 @@
 #SBATCH --time=5:00:00
 #SBATCH --gres=gpu:1
 #SBATCH --mem=16gb
-#SBATCH --error=logs/dep-rank.%j.err
-#SBATCH --out=logs/dep-rank.%j.out
+#SBATCH --error=logs/new_ncdg.%j.err
+#SBATCH --out=logs/new_ncdg.%j.out
 
 source /curc/sw/anaconda3/latest
 conda activate bankrank

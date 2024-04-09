@@ -60,7 +60,6 @@ def predict(predict_dir, task, dist, source, exclude):
         lang_path = "{path}/{lang}.txt".format(path = model_path, lang = lang)
         print(lang_path)
         cands = rankings[lang][0]
-        cands.append(lang)
         prepared = lr.prepare_featureset(lang=lang, task = task)
         predicted[lang] = lr.rank(prepared, test_lang = lang, task=task, candidates=cands, model = lang_path, distances = dist, source = source, exclude = exclude)
     pf = predict_dir + "/predictions.pkl"
@@ -68,26 +67,21 @@ def predict(predict_dir, task, dist, source, exclude):
     with open(pf, 'wb') as f:
         pickle.dump(predicted, f)
 
+def scores_ranking(ranking, gamma_max = 10):
+    scores_by_index = [0] * len(ranking)
+    for i in range(len(ranking)): 
+        if ranking[i] <= gamma_max:
+            scores_by_index[i] = gamma_max - (ranking[i])
+    return scores_by_index
+
 def compute_ndcg(lang, ranked_langs, predicted, gamma_max= 9, k=3):
     ranking_langs = ranked_langs[lang][0] # list of languages for looking up index in ranking vector
     # gives position in ranking based on index (if ranking[0] = 4 then the 0th language [ranking_langs[0]] is the 5th best)
     ranking = ranked_langs[lang][1] 
-    print(ranking)
     # creates vector to look up the relevance score of a given language by index
-    scores_by_index = [0] * len(ranking)
-    for i in range(len(ranking)): 
-        if ranking[i] <= gamma_max:
-            scores_by_index[i] = gamma_max - (ranking[i] -1)
-    ideal_score = [i for i in reversed(range(1, gamma_max + 1))] + [0] * (len(ranking) - gamma_max)
-    print(ideal_score)
-    predicted_score = [0] * len(ranking)
-    for j in range(len(predicted)): #for each language in ranking
-        code = predicted[j]
-        index = ranking_langs.index(code)
-        score = scores_by_index[index] #finds the true relevance of each language
-        predicted_score[j] = score
-    print(predicted_score)
-    return sm.ndcg_score(np.asarray([ideal_score]), np.asarray([predicted_score]),k=k)
+    predicted_scores = scores_ranking(predicted)
+    gold_scores = scores_ranking(ranking)
+    return sm.ndcg_score(np.asarray([gold_scores]), np.asarray([predicted_scores]),k=k)
 
 
 def save_ndcg(task, predict_dir):    
@@ -97,7 +91,7 @@ def save_ndcg(task, predict_dir):
     with open(defaults.GOLD_FILE.format(task=task), 'rb') as f:
         rankings = pickle.load(f)
     languages = list(rankings.keys())
-    ndcg = {lang: compute_ndcg(lang, rankings, predictions[lang]) for lang in languages}
+    ndcg = {lang: compute_ndcg(lang, rankings, predictions[lang][0]) for lang in languages}
     score = str(mean(ndcg.values()))
 
     with open(predict_dir + "ncdg.pkl", 'wb') as f:
@@ -144,16 +138,16 @@ def main(
     model_langs = list(training.keys())
     print(f"training {task} for ablation {key} from source {source}")
 
-    # for lang in model_langs:
-    #     print(lang)
-    #     languages = list(training[lang][1].keys())
-    #     rank = list(training[lang][1].values())
-    #     if distance:
-    #         train_one_distances(model_dir, task, languages, rank, lang)
-    #     else:
-    #         train_one_distanceless(model_dir, task, languages, rank, lang, source, exclude)
+    for lang in model_langs:
+        print(lang)
+        languages = list(training[lang][1].keys())
+        rank = list(training[lang][1].values())
+        if distance:
+            train_one_distances(model_dir, task, languages, rank, lang)
+        else:
+            train_one_distanceless(model_dir, task, languages, rank, lang, source, exclude)
     
-    # print("finished training")
+    print("finished training")
 
     predict_dir = "./results/" + defaults.FILE_EXTENSION.format(task = task, source = source, key = key)
     if not os.path.exists(predict_dir): 

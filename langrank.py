@@ -570,7 +570,7 @@ def rank(test_dataset_features, test_lang, task="MT", candidates="all", model="b
 		candidate_list = get_candidates(task, candidates)
 	features = {cand[1]['lang']: cand[1] for cand in candidate_list }
 	print("Collecting URIEL distance vectors...")
-	languages = [test_lang] + [c[1]["lang"] for c in candidate_list]
+	languages = [c[1]["lang"] for c in candidate_list]
 	# TODO: This takes forever...
 	if distances:
 		uriel = uriel_distance_vec(languages)
@@ -640,7 +640,7 @@ def rank(test_dataset_features, test_lang, task="MT", candidates="all", model="b
 						"INVENTORY", "GEOGRAPHIC"]
 	ind = list(np.argsort(-predict_scores))
 	if return_langs:
-		return [candidate_list[i][1]["lang"] for j,i in enumerate(ind)]
+		return predict_scores, [candidate_list[i][1]["lang"] for j,i in enumerate(ind)]
 	
 	test_inputs = np.array(test_inputs)
 	for j in range(len(feature_name)):

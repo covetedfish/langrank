@@ -1,6 +1,6 @@
 #!/bin/bash
 for ablation in "None"; do
-    for source in "syntax_grambank"; do
+    for source in "syntax_knn" "syntax_grambank"; do
         for task in "POS"; do
             combo=$(printf '{"task": "%s", "ablation": "%s" , "distance": "False" , "source":"%s"}' "$task" "$ablation" "$source")
             combos+=("$combo")
