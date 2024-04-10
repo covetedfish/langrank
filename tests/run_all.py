@@ -106,16 +106,18 @@ def save_ndcg(task, predict_dir):
 @click.option("-a", "--ablation", type=str, default= "Noe", help="feature set to remove")
 @click.option("-d", "--distance", type=bool, default=False, help="feature set to remove")
 @click.option("-s", "--source", type=str, default= "syntax_knn", help="syntax_knn or syntax_grambank")
+@click.option("-s", "--arch", type=str, default= "mtt", help="mtt or xpos")
 
 def main(
     task,
     ablation,
     distance,
-    source
+    source, 
+    arch
 ):
     exclude = []
     print(distance)
-    t_file = defaults.TRAIN_FILE.format(task = task)
+    t_file = defaults.TRAIN_FILE.format(arch = arch, task = task)
     print(t_file)
 
     with open(t_file, 'rb') as f:
@@ -130,7 +132,7 @@ def main(
     else:
         key = "dist" if distance == True else "full"
     
-    model_dir = "./models/" + defaults.FILE_EXTENSION.format(task = task, source = source, key = key)
+    model_dir = "./models/" + defaults.FILE_EXTENSION.format(task = task, source = source, key = key, arch = arch)
     print(model_dir)
     if not os.path.exists(model_dir): 
         os.makedirs(model_dir) 
@@ -149,7 +151,7 @@ def main(
     
     print("finished training")
 
-    predict_dir = "./results/" + defaults.FILE_EXTENSION.format(task = task, source = source, key = key)
+    predict_dir = "./results/" + defaults.FILE_EXTENSION.format(task = task, source = source, key = key, arch = arch)
     if not os.path.exists(predict_dir): 
             os.makedirs(predict_dir) 
     predict(predict_dir, task, distance, source, exclude)

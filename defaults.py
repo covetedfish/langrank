@@ -1,5 +1,5 @@
-FILE_EXTENSION = "{source}/{task}/{key}"
-TRAIN_FILE = "./training-data/xtt_ranked.pkl"
-GOLD_FILE = "./training-data/xtt_golds_no_ties.pkl"
+FILE_EXTENSION = "{source}/{task}/{arch}/{key}"
+TRAIN_FILE = "./training-data/{arch}_{task}_ranked.pkl"
+GOLD_FILE = "./training-data/{arch}_{task}_golds.pkl"
 ABLATIONS_PATH = "./resources/fine_categorization.csv"
 RESULTS_PATH = "./results.tsv"

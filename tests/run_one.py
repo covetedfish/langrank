@@ -20,9 +20,9 @@ def main():
         if params["ablation"] == "None":
             params["ablation"] = None
         if params["distance"] == "False":
-            params["ablation"] = False
+            params["distance"] = False
         if params["distance"] == "True":
-            params["ablation"] = True
+            params["distance"] = True
         run_experiment(**params)
     except json.JSONDecodeError as e:
         print(f"Error decoding JSON: {args.params}")
