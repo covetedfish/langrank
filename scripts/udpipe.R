@@ -2,6 +2,7 @@
 library(udpipe)
 library(optparse)
 
+setwd("./conllu")
 # # Define command line options
 option_list <- list(
   make_option(c("-s", "--source"), type = "character", default = NULL, help = "Input 3 letter iso code for source language", metavar = "CONLL_FILE"),
@@ -38,8 +39,8 @@ train_pos_model <- function(train, dev, model_file) {
 }
 
 make_train_file <- function(source, target) {
-  source_file = paste(source, "train.txt", "_")
-  target_file = paste(target, "train.txt", "_")
+  source_file = paste(source, "train.conllu", "_")
+  target_file = paste(target, "train.conllu", "_")
   
   # Load contents from two files
   file1 <- readLines(source_file)
@@ -47,7 +48,7 @@ make_train_file <- function(source, target) {
   
   # Concatenate their contents
   concatenated_text <- c(file1, file2)
-  save_file = paste(paste(source, target, "-"), "train.txt", "_")
+  save_file = paste(paste(source, target, "-"), "train.conllu", "_")
   # Save to a new file
   writeLines(concatenated_text, save_file)
   return(save_file)
@@ -60,8 +61,8 @@ a = Sys.time()
 model_file = paste(paste(opt$source, opt$transfer, "-"), ".udpipe")
 
 train_ <- make_train_file(opt$source, opt$target)
-dev = paste(source, "dev.txt", "_")
-test= paste(source, "test.txt", "_")
+dev = paste(source, "dev.conllu", "_")
+test= paste(source, "test.conllu", "_")
 
 train_pos_model(train, dev, model_file)
 # train_pos_model(file_conllu, "toymodel.udpipe")
@@ -85,5 +86,5 @@ data <- data.frame(
 )
 
 # Save to CSV
-write.csv(data, "accuracy.csv", row.names = FALSE, append = TRUE)
+write.csv(data, "./models/accuracy.csv", row.names = FALSE, append = TRUE)
 
