@@ -1,5 +1,7 @@
 FILE_EXTENSION = "{source}/{task}/{arch}/{key}"
 TRAIN_FILE = "./training-data/{arch}_{task}_ranked.pkl"
+# TRAIN_FILE = "/projects/enri8153/langrank/training-data/POS_original_ranked_train_no_ties.pkl"
+# GOLD_FILE = "/projects/enri8153/langrank/training-data/POS_golds_no_ties.pkl"
 GOLD_FILE = "./training-data/{arch}_{task}_golds.pkl"
 ABLATIONS_PATH = "./resources/fine_categorization.csv"
 RESULTS_PATH = "./results.tsv"

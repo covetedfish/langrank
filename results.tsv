@@ -1,1 +1,3 @@
 POS	full	syntax_grambank	False	0.8082304508111341
+POS	full	syntax_knn	False	xpos	0.4157862949007731
+POS	full	syntax_knn	False	mtt	0.31642923660612365

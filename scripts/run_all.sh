@@ -1,9 +1,9 @@
 #!/bin/bash
 for ablation in "None"; do
-    for source in "syntax_knn" "syntax_grambank"; do
+    for source in "syntax_knn"; do
         for task in "POS"; do
             for arch in "mtt" "xpos"; do
-                combo=$(printf '{"task": "%s", "ablation": "%s" , "distance": "False" , "source":"%s", "arch":"%s"}' "$task" "$ablation" "$source", "$arch")
+                combo=$(printf '{"task": "%s", "ablation": "%s" , "distance": "False" , "source":"%s" , "arch":"%s"}' "$task" "$ablation" "$source" "$arch")
                 combos+=("$combo")
             done
         done
