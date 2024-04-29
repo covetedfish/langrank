@@ -22,4 +22,4 @@ echo "$transfer"
 source /curc/sw/anaconda3/latest
 conda activate bankrank
 
-Rscript ./scripts/udpipe.R -s "$src" -t "$transfer"
+Rscript ./scripts/udpipe_predict.R -s "$src" -t "$transfer"

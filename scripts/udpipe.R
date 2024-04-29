@@ -12,9 +12,8 @@ option_list <- list(
 # Parse command line arguments
 opt_parser <- OptionParser(option_list = option_list)
 opt <- parse_args(opt_parser)
-
 # Check if the CoNLL-U file name and the model file name are provided
-if (is.null(opt$sourcel) || is.null(opt$transfer)) {
+if (is.null(opt$source) || is.null(opt$transfer)) {
   cat("Error: Please provide the iso for source and transfer languages\n")
   quit(status = 1)
 }
@@ -26,7 +25,7 @@ train_pos_model <- function(train, dev, model_file) {
   m <- udpipe_train(file = model_file, 
                     files_conllu_training = train, 
                     files_conllu_holdout  = dev,
-                    annotation_tokenizer = list(dimension = 64, epochs = 100, segment_size=200, initialization_range = 0.1, 
+                    annotation_tokenizer = list(dimension = 64, epochs = 20, segment_size=200, initialization_range = 0.1, 
                                                 batch_size = 50, learning_rate = 0.002, learning_rate_final=0, dropout = 0.1, early_stopping = 1),
                     annotation_tagger = list(models = 2, 
                                              templates_1 = "lemmatizer", guesser_suffix_rules_1 = 8, guesser_enrich_dictionary_1 = 4, guesser_prefixes_max_1 = 4, 
@@ -38,51 +37,66 @@ train_pos_model <- function(train, dev, model_file) {
   
 }
 
-make_train_file <- function(source, target) {
-  source_file = paste(source, "train.conllu", "_")
-  target_file = paste(target, "train.conllu", "_")
+make_train_file <- function(source, transfer) {
+  print(source)
+  print(transfer)
+  source_file = paste(source, "train.conllu", sep = "_")
+  transfer_file = paste(transfer, "train.conllu", sep = "_")
   
   # Load contents from two files
-  file1 <- readLines(source_file)
-  file2 <- readLines(target_file)
-  
+  file1 <- udpipe_read_conllu(source_file)
+  file2 <- udpipe_read_conllu(transfer_file)
+
   # Concatenate their contents
-  concatenated_text <- c(file1, file2)
-  save_file = paste(paste(source, target, "-"), "train.conllu", "_")
+  data <- rbind(file1, file2)
+  shuffled_data= data[sample(1:nrow(data)), ] 
+  save_file = paste(paste(source, transfer, sep = "-"), "train.conllu", sep = "_")
   # Save to a new file
-  writeLines(concatenated_text, save_file)
+  cat(as_conllu(data), file = file(save_file, encoding = "UTF-8"))
   return(save_file)
 }
 
 a = Sys.time()
 # file_conllu <- system.file(package = "udpipe", "dummydata", "traindata.conllu")
 # Train POS model
+dev = paste(opt$source, "dev.conllu", sep = "_")
+test= paste(opt$source, "test.conllu",sep =  "_")
 
-model_file = paste(paste(opt$source, opt$transfer, "-"), ".udpipe")
+inverse = paste("./models", paste(paste(opt$transfer, opt$source,sep = "-"), ".udpipe", sep = ""))
+if (!(file.exists(inverse))) {
+  model_file = paste("./models/", paste(paste(opt$source, opt$transfer, sep = "-"), ".udpipe", sep = ""))
+  print(opt$source)
+  print(opt$transfer)
+  train <- make_train_file(opt$source, opt$transfer)
 
-train_ <- make_train_file(opt$source, opt$target)
-dev = paste(source, "dev.conllu", "_")
-test= paste(source, "test.conllu", "_")
+  train_pos_model(train, dev, model_file)
+  # train_pos_model(file_conllu, "toymodel.udpipe")
+  file.remove(train)
+  m <- udpipe_load_model(model_file)
 
-train_pos_model(train, dev, model_file)
-# train_pos_model(file_conllu, "toymodel.udpipe")
-file.remove(train)
+} else {
+  m <- udpipe_load_model(inverse)
+}
 ## Evaluate the accuracy
-m <- udpipe_load_model(opt$model)
-goodness_of_fit <- udpipe_accuracy(m, test, tokenizer = "default", tagger = "default")
+goodness_of_fit <- udpipe_accuracy(m, dev, tokenizer = "default", tagger = "default")
 accuracy <- goodness_of_fit$accuracy
 
 b = Sys.time()
-runtime = a - b
+runtime = b - a
 
-lines <- strsplit(accuracy, "\n")[[1]]
+u_pattern <- "(upostag):\\s*([\\d\\.]+)%"
+x_pattern <- "(xpostag):\\s*([\\d\\.]+)%"
+
+upos <- regmatches(accuracy, regexpr(u_pattern, accuracy, perl = TRUE))
+xpos <-regmatches(accuracy, regexpr(x_pattern, accuracy, perl = TRUE))
 
 # Create a data frame
 data <- data.frame(
-  Category = connl_dir,
-  UPOS = as.numeric(sub(".*upostag: ([0-9.]+)%,.*", "\\1", lines[6])),
-  XPOS = as.numeric(sub(".*xpostag: ([0-9.]+)%,.*", "\\1", lines[6])),
-  Runtime - runtime
+  source = opt$source,
+  transfer = opt$transfer,
+  upos = upos,
+  xpos = xpos,
+  Runtime = runtime
 )
 
 # Save to CSV
