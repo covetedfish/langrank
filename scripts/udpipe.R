@@ -21,7 +21,19 @@ if (is.null(opt$source) || is.null(opt$transfer)) {
 # Function to train a POS tagging model with udpipe
 train_pos_model <- function(train, dev, model_file) {
   # Load CoNLL-U formatted data
-
+  if (!(file.exists(dev))) {
+    cat("Error: dev file doesn't exist\n")
+    quit(status = 1)
+  }
+  if (!(file.exists(train))) {
+    cat("Error: train file doesn't exist\n")
+    quit(status = 1)
+  }
+  if (!(file.exists(model_file))) {
+    print("model file does not yet exist")
+  }else{
+    print("model file already exists")
+  }
   m <- udpipe_train(file = model_file, 
                     files_conllu_training = train, 
                     files_conllu_holdout  = dev,
@@ -34,7 +46,6 @@ train_pos_model <- function(train, dev, model_file) {
                                              templates_2 = "tagger", guesser_suffix_rules_2 = 8, guesser_enrich_dictionary_2 = 4, guesser_prefixes_max_2 = 0, 
                                              use_lemma_2 = 1, provide_lemma_2 = 0, use_xpostag_2 = 1, provide_xpostag_2 = 1, 
                                              use_feats_2 = 1, provide_feats_2 = 1, prune_features_2 = 1))
-  
 }
 
 make_train_file <- function(source, transfer) {
@@ -49,10 +60,9 @@ make_train_file <- function(source, transfer) {
 
   # Concatenate their contents
   data <- rbind(file1, file2)
-  shuffled_data= data[sample(1:nrow(data)), ] 
   save_file = paste(paste(source, transfer, sep = "-"), "train.conllu", sep = "_")
   # Save to a new file
-  cat(as_conllu(data), file = file(save_file, encoding = "UTF-8"))
+  writeLines(as_conllu(data), save_file)
   return(save_file)
 }
 
@@ -61,44 +71,32 @@ a = Sys.time()
 # Train POS model
 dev = paste(opt$source, "dev.conllu", sep = "_")
 test= paste(opt$source, "test.conllu",sep =  "_")
+print(dev)
+print(test)
 
-inverse = paste("./models", paste(paste(opt$transfer, opt$source,sep = "-"), ".udpipe", sep = ""))
-if (!(file.exists(inverse))) {
-  model_file = paste("./models/", paste(paste(opt$source, opt$transfer, sep = "-"), ".udpipe", sep = ""))
-  print(opt$source)
-  print(opt$transfer)
-  train <- make_train_file(opt$source, opt$transfer)
 
-  train_pos_model(train, dev, model_file)
-  # train_pos_model(file_conllu, "toymodel.udpipe")
-  file.remove(train)
-  m <- udpipe_load_model(model_file)
-
-} else {
-  m <- udpipe_load_model(inverse)
+if (!(file.exists(dev))) {
+  cat("Error: dev file doesn't exist\n")
+  quit(status = 1)
 }
-## Evaluate the accuracy
-goodness_of_fit <- udpipe_accuracy(m, dev, tokenizer = "default", tagger = "default")
-accuracy <- goodness_of_fit$accuracy
+if (!(file.exists(test))) {
+  cat("Error: test file doesn't exist\n")
+  quit(status = 1)
+}
 
-b = Sys.time()
-runtime = b - a
-
-u_pattern <- "(upostag):\\s*([\\d\\.]+)%"
-x_pattern <- "(xpostag):\\s*([\\d\\.]+)%"
-
-upos <- regmatches(accuracy, regexpr(u_pattern, accuracy, perl = TRUE))
-xpos <-regmatches(accuracy, regexpr(x_pattern, accuracy, perl = TRUE))
-
-# Create a data frame
-data <- data.frame(
-  source = opt$source,
-  transfer = opt$transfer,
-  upos = upos,
-  xpos = xpos,
-  Runtime = runtime
-)
-
-# Save to CSV
-write.csv(data, "./models/accuracy.csv", row.names = FALSE, append = TRUE)
-
+inverse = paste("./models/", paste(paste(opt$transfer, opt$source,sep = "-"), ".udpipe", sep = ""))
+if (!(file.exists(inverse))) {
+  print("NOT INVERSE")
+  model_file = paste("./models/", paste(paste(opt$source, opt$transfer, sep = "-"), ".udpipe", sep = ""))
+  if (file.exists(model_file)) {
+    print("model file already exists")
+  }
+  train <- make_train_file(opt$source, opt$transfer)
+  if (file.exists(train)) {
+    print("train file successfully generated")
+    print(train)
+  }
+  print(model_file)
+  train_pos_model(train, dev, model_file)
+  m <- udpipe_load_model(model_file)
+} 

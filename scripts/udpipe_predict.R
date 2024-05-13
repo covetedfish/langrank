@@ -17,11 +17,13 @@ if (is.null(opt$source) || is.null(opt$transfer)) {
   cat("Error: Please provide the iso for source and transfer languages\n")
   quit(status = 1)
 }
-inverse = paste("./models", paste(paste(opt$transfer, opt$source,sep = "-"), ".udpipe", sep = ""))
-if (!(file.exists(inverse))) {
-  model_file = paste("./models/", paste(paste(opt$source, opt$transfer, sep = "-"), ".udpipe", sep = ""))
+inverse = paste("./models/", paste(paste(opt$transfer, opt$source,sep = "-"), ".udpipe", sep = ""))
+print(inverse)
+if (file.exists(inverse)) {
+  model_file = inverse
+  print("exists")
 }else{ 
-    model_file = inverse
+  model_file = paste("./models/", paste(paste(opt$source, opt$transfer, sep = "-"), ".udpipe", sep = ""))
 }
 m <- udpipe_load_model(model_file)
 
