@@ -265,15 +265,16 @@ def prepare_train_pickle_no_data(train_langs, target_langs, rank, task="MT", tmp
 		rank = np.array(rank)
 	BLEU_level = -rank + len(train_langs) #invert rankings (lower score is worse)
 	rel_BLEU_level = lgbm_rel_exp(BLEU_level, REL_EXP_CUTOFF) #limit rankings to 1-cutoff
-	target_features = {lang: prepare_featureset(lang, task) for lang in target_langs}
-	for lang in list(target_features.keys()): 
-		if target_features[lang] == []:
-			del target_features[lang]
-	train_features = {lang: prepare_featureset(lang, task) for lang in train_langs}
-	for lang in list(train_features.keys()): 
-		if train_features[lang] == []:
-			del train_features[lang]
-	all_langs = list(set(target_features.keys()).union(set(train_features.keys())))
+	# target_features = {lang: prepare_featureset(lang, task) for lang in target_langs}
+	# for lang in list(target_features.keys()): 
+	# 	if target_features[lang] == []:
+	# 		del target_features[lang]
+	# train_features = {lang: prepare_featureset(lang, task) for lang in train_langs}
+	# for lang in list(train_features.keys()): 
+	# 	if train_features[lang] == []:
+	# 		del train_features[lang]
+	# all_langs = list(set(target_features.keys()).union(set(train_features.keys())))
+	all_langs = list(set(target_langs).union(set(train_langs)))
 	if distances:
 		uriel = uriel_distance_vec(all_langs)
 	else:
@@ -291,9 +292,9 @@ def prepare_train_pickle_no_data(train_langs, target_langs, rank, task="MT", tmp
 	train_size_f = open(train_size, "w")
 	train_len = len(train_features.keys())
 	test_len = len(target_features.keys())
-	for lang1 in target_features.keys():
+	for lang1 in target_langs:
 		count = 0
-		for lang2 in train_features.keys():
+		for lang2 in train_langs:
 			i = all_langs.index(lang1)
 			j = all_langs.index(lang2)
 			if i != j:
@@ -303,7 +304,8 @@ def prepare_train_pickle_no_data(train_langs, target_langs, rank, task="MT", tmp
 				else:
 					syntax_features = l2v.get_feature_match_dict([lang1, lang2], source, exclude)
 					uriel_features = {u: uriel[u][i, j] for u in uriel.keys()} # gets uriel distances for each distance in uriel
-				distance_feats = distance_feat_dict(target_features[lang1], train_features[lang2], task)
+				distance_feats = {} #NOT USING DATASET FEATS
+				# distance_feats = distance_feat_dict(target_features[lang1], train_features[lang2], task)
 				distance_feats.update(uriel_features)
 				distance_feats.update(syntax_features)
 				if not train_data is None:
@@ -312,7 +314,7 @@ def prepare_train_pickle_no_data(train_langs, target_langs, rank, task="MT", tmp
 					train_data = pd.DataFrame([distance_feats])
 				score = str(rel_BLEU_level[target_langs.index(lang1), train_langs.index(lang2)])
 				scores.append(score)
-		print(f"writing {count} to train_size") #i think the issue is here... how to get the right train size
+		print(f"writing {count} to train_size") 
 		train_size_f.write(f"{count}\n")
 	print(f"i=j {count} times")
 	print(f"shape of train_data: {train_data.shape}")
@@ -461,12 +463,12 @@ def prepare_train_file_no_data(langs, rank, task="MT", tmp_dir="tmp"):
 		rank = np.array(rank)
 	BLEU_level = -rank + len(langs)
 	rel_BLEU_level = lgbm_rel_exp(BLEU_level, REL_EXP_CUTOFF)
-	features = {lang: prepare_featureset(lang, task) for lang in langs}
-	for lang in list(features.keys()): #stupid ass POS target languages aren't in the data??????
-		if features[lang] == []:
-			print(f"deleting {lang}")
-			del features[lang]
-	langs = list(features.keys())
+	# features = {lang: prepare_featureset(lang, task) for lang in langs}
+	# for lang in list(features.keys()): #stupid ass POS target languages aren't in the data??????
+	# 	if features[lang] == []:
+	# 		print(f"deleting {lang}")
+	# 		del features[lang]
+	# langs = list(features.keys())
 	uriel = uriel_distance_vec(langs)
 	if not os.path.exists(tmp_dir):
 		os.mkdir(tmp_dir)
@@ -482,7 +484,8 @@ def prepare_train_file_no_data(langs, rank, task="MT", tmp_dir="tmp"):
 					uriel_features = [u for u in uriel]
 				else:
 					uriel_features = [u[i, j] for u in uriel]
-				distance_vector = distance_vec(features[lang1], features[lang2], uriel_features, task)
+				distance_vec = np.array(uriel_features)
+				# distance_vector = distance_vec(features[lang1], features[lang2], uriel_features, task)
 				distance_vector = ["{}:{}".format(i, d) for i, d in enumerate(distance_vector)]
 				line = " ".join([str(rel_BLEU_level[i, j])] + distance_vector)
 				train_file_f.write(line + "\n")
@@ -530,7 +533,8 @@ def prepare_train_file(datasets, langs, rank, segmented_datasets=None, task="MT"
 		for j, lang2 in enumerate(langs):
 			if i != j:
 				uriel_features = [u[i, j] for u in uriel]
-				distance_vector = distance_vec(features[lang1], features[lang2], uriel_features, task)
+				distance_vector = np.array(uriel_features)
+				# distance_vector = distance_vec(features[lang1], features[lang2], uriel_features, task)
 				distance_vector = ["{}:{}".format(i, d) for i, d in enumerate(distance_vector)]
 				line = " ".join([str(rel_BLEU_level[i, j])] + distance_vector)
 				train_file_f.write(line + "\n")
@@ -578,7 +582,7 @@ def train(tmp_dir, output_model):
 	model.booster_.save_model(output_model)
 
 
-def rank(test_dataset_features, test_lang, task="MT", candidates="all", model="best", print_topK=3, distances = True, exclude = [], source = "syntax_knn", return_langs = True):
+def rank(test_lang, task="MT", candidates="all", model="best", print_topK=3, distances = True, exclude = [], source = "syntax_knn", return_langs = True):
 	'''
 	test_dataset_features : the output of prepare_new_dataset(). Basically a dictionary with the necessary dataset features.
 	'''
@@ -609,7 +613,8 @@ def rank(test_dataset_features, test_lang, task="MT", candidates="all", model="b
 			cand_dict = c[1]
 			candidate_language = Lang(cand_dict['lang']).pt3
 			uriel_j = [u[0,i+1] for u in uriel]
-			distance_vector = distance_vec(test_dataset_features, cand_dict, uriel_j, task) #what does this actually return?
+			distance_vector = np.aray(uriel_j)
+			# distance_vector = distance_vec(test_dataset_features, cand_dict, uriel_j, task) #what does this actually return?
 			test_inputs.append(distance_vector)
 	else:
 		print("Collecting dataset distance vectors...")
@@ -621,7 +626,8 @@ def rank(test_dataset_features, test_lang, task="MT", candidates="all", model="b
 			candidate_language = Lang(cand_dict['lang']).pt3
 			syntax_features = l2v.get_feature_match_dict([test_lang, candidate_language], source, exclude)
 			uriel_features = {u: uriel[u][0, i+1] for u in uriel.keys()} # 0 because test lang is the 0th row
-			distance_feats = distance_feat_dict(test_dataset_features, features[candidate_language], task)
+			distance_feats = {} #NOT USING DATASET FEAT
+			# distance_feats = distance_feat_dict(test_dataset_features, features[candidate_language], task)
 			distance_feats.update(uriel_features)
 			distance_feats.update(syntax_features)
 			if not test_data is None:
