@@ -24,9 +24,9 @@ mapfile -t trnsfr_languages < $trnsfr_language_file
 for ((i=0; i<${#src_languages[@]}; i++)); do
     # for ((j=0; j<${#src_languages[@]}; j++)); do
     # Call the other script and pass the languages as arguments
-    language_pair="${src_languages[i]]} ${trnsfr_languages[j]}"
-    FILE="./conllu/models/ ${src_languages[i]]}-${trnsfr_languages[j]}.udpipe"
-    INVERSE="./conllu/models/ ${trnsfr_languages[i]]}-${src_languages[j]}.udpipe"
+    language_pair="${src_languages[i]]} ${trnsfr_languages[i]}"
+    FILE="./conllu/models/ ${src_languages[i]]}-${trnsfr_languages[i]}.udpipe"
+    INVERSE="./conllu/models/ ${trnsfr_languages[i]]}-${src_languages[i]}.udpipe"
     if [ -f "$FILE" ] || [ -f "$INVERSE" ]; then
         echo "Predicting ${src_languages[i]} and ${trnsfr_languages[i]}"
         sbatch --export=LANGUAGES="${language_pair}" ./scripts/predict_udpipe.sh 

@@ -60,8 +60,8 @@ def predict(predict_dir, arch, task, dist, source, exclude):
         lang_path = "{path}/{lang}.txt".format(path = model_path, lang = target_lang)
         print(lang_path)
         train_langs = rankings[target_lang][0]
-        prepared = lr.prepare_featureset(lang=target_lang, task = task)
-        predicted[target_lang] = lr.rank(prepared, test_lang = target_lang, task=task, candidates=train_langs, model = lang_path, distances = dist, source = source, exclude = exclude)
+        # prepared = lr.prepare_featureset(lang=target_lang, task = task) #don't need if we exclude dataset dependent feats
+        predicted[target_lang] = lr.rank(test_lang = target_lang, task=task, candidates=train_langs, model = lang_path, distances = dist, source = source, exclude = exclude)
     pf = predict_dir + "/predictions.pkl"
     print(pf)
     with open(pf, 'wb') as f:
