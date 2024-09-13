@@ -13,41 +13,60 @@ import langrank as lr
 from statistics import mean
 import sklearn.metrics as sm
 import numpy as np
-
+NUM_FEATS = 113
 #do i want to do it one language at a time? how would that look? -- I can only train/predict one lang at a time because rank takes the average
 #Maybe I should separate rank_all again? I don't think i will because handling batchig correct task languages would be annoying
 
 def read_ablations_dictionary(source, path = defaults.ABLATIONS_PATH):
     if source == "syntax_grambank":
         key = "Grambank"
+    elif source == "syntax_knn":
+        key= "Uriel"
     else:
-        key = "Uriel"
+        return None
     a = pd.read_csv(open(path, 'rb'))
     categories = list(a["Categories"])[:-2]
     cat_dict = {}
     for cat in categories: #what to exclude?
-        if cat in ["quantification", "non-verbal predication", "argument marking (non-core)", "valency", "verb complex"]: 
-                continue
-        feats = list(a[key][a.loc[a["Categories"] == cat].index])[0].split(",")
-        pattern = r'[^\w\s]|_'
-    # Use re.sub() to replace all matches of the pattern with an empty string
-        feats  = [re.sub(pattern, '', s) for s in feats]
-        cat_dict[cat] = feats
+        print(cat)
+        # if cat in ["quantification", "non-verbal predication", "argument marking (non-core)", "valency", "verb complex"]: 
+        #         continue
+        category_rows = a[a["Categories"] == cat]
+    
+        # Check if there's at least one row for the category
+        if not category_rows.empty:
+            print(category_rows[key])
+            feats = category_rows.iloc[0][key].split(",")
+            pattern = r'[^\w\s]|_'
+            # Use re.sub() to replace all matches of the pattern with an empty string
+            print(feats)
+            feats  = [re.sub(pattern, '', s) for s in feats] 
+            print(feats)
+            cat_dict[cat] = feats
+            # Print the features
+            print(f"Features for category '{cat}': {feats}")
+        else:
+            print(f"No rows found for category '{cat}'")
     return cat_dict
 
-def train_one_distanceless(dir_path, task, train_langs, target_langs, rank, test_lang, source, exclude):
-    print(f"Languages ranked (leave one out): {target_langs}")
-    prepare_train_pickle_no_data(train_langs=train_langs, target_langs=target_langs, rank=rank, tmp_dir=dir_path, task = task, distances = False, source = source, exclude = exclude)
+
+def train_one(dir_path, task, train_langs, target_langs, rank, test_lang, source, exclude, distances):
+    print(f"target languages ranked (leave one out): {target_langs}")
+    print(f"transfer languages {train_langs}")
+    print(f"type of rank {type(rank)}")
+
+
+    prepare_train_pickle_no_data(train_langs=train_langs, target_langs=target_langs, rank=rank, tmp_dir=dir_path, task = task, distances = distances, source = source, exclude = exclude)
     output_model = "{}/{}.txt".format(dir_path,test_lang)
     train_from_pickle(tmp_dir= dir_path, output_model=output_model)
     assert os.path.isfile(output_model)
 
-def train_one_distances(dir_path, task, langs, rank, test_lang):
-    print(langs)
-    prepare_train_file_no_data(langs=langs, rank=rank, tmp_dir=dir_path, task = task)
-    output_model = "{}/{}.txt".format(dir_path,test_lang)
-    train(tmp_dir= dir_path, output_model=output_model)
-    assert os.path.isfile(output_model)
+# def train_one_distances(dir_path, task, train_langs, target_langs, rank, test_lang):
+#     print(langs)
+#     prepare_train_pickle_no_data(train_langs=train_langs, target_langs=target_langs, rank=rank, tmp_dir=dir_path, task = task, distances = True, source = , exclude = exclude)
+#     output_model = "{}/{}.txt".format(dir_path,test_lang)
+#     train(tmp_dir= dir_path, output_model=output_model)
+#     assert os.path.isfile(output_model)
 
 
 def predict(predict_dir, arch, task, dist, source, exclude):
@@ -59,8 +78,9 @@ def predict(predict_dir, arch, task, dist, source, exclude):
     for target_lang in languages:
         lang_path = "{path}/{lang}.txt".format(path = model_path, lang = target_lang)
         print(lang_path)
-        train_langs = rankings[target_lang][0]
+        train_langs = list(rankings[target_lang][0])
         # prepared = lr.prepare_featureset(lang=target_lang, task = task) #don't need if we exclude dataset dependent feats
+        print(dist)
         predicted[target_lang] = lr.rank(test_lang = target_lang, task=task, candidates=train_langs, model = lang_path, distances = dist, source = source, exclude = exclude)
     pf = predict_dir + "/predictions.pkl"
     print(pf)
@@ -73,6 +93,7 @@ def scores_ranking(ranking, gamma_max = 10):
         if ranking[i] <= gamma_max:
             scores_by_index[i] = gamma_max - (ranking[i])
     return scores_by_index
+    
 def make_ranking(predicted, ranked_langs):
     ranking = [0] * len(ranked_langs)
     for rank, lang in enumerate(predicted):
@@ -114,8 +135,8 @@ def save_ndcg(task, arch, predict_dir):
 @click.option("-t", "--task", type=str, default="MT", help="NLP task")
 @click.option("-a", "--ablation", type=str, default= "Noe", help="feature set to remove")
 @click.option("-d", "--distance", type=bool, default=False, help="feature set to remove")
-@click.option("-s", "--source", type=str, default= "syntax_knn", help="syntax_knn or syntax_grambank")
-@click.option("-s", "--arch", type=str, default= "mtt", help="mtt or xpos")
+@click.option("-s", "--source", type=str, default= "syntax_knn", help="syntax_knn or syntax_grambank or both")
+@click.option("-s", "--arch", type=str, default= "mtt", help="stanza or xpos")
 
 def main(
     task,
@@ -125,9 +146,7 @@ def main(
     arch
 ):
     exclude = []
-    print(distance)
     t_file = defaults.TRAIN_FILE.format(arch = arch, task = task)
-    print(t_file)
 
     with open(t_file, 'rb') as f:
         training= pickle.load(f)
@@ -142,36 +161,49 @@ def main(
         key = "dist" if distance == True else "full"
     
     model_dir = "./models/" + defaults.FILE_EXTENSION.format(task = task, source = source, key = key, arch = arch)
-    print(model_dir)
     if not os.path.exists(model_dir): 
         os.makedirs(model_dir) 
 
     model_langs = list(training.keys())
-    print(f"training {task} for ablation {key} from source {source}")
-
+    # model_langs = ["eng"]
+    # print(f"training {task} for ablation {key} from source {source}")
     # for lang in model_langs:
     #     print(lang)
-    #     target_languages = list(training[lang][1].keys())
-    #     train_languages = list(training[lang][0])
+    #     target_languages = list(training[lang][1].keys()) #why did i format my data so weird!
+    #     train_languages = list(training[lang][0]) 
     #     rank = list(training[lang][1].values())
-    #     if distance:
-    #         train_one_distances(model_dir, task, target_languages, rank, lang)
-    #     else:
-    #         train_one_distanceless(model_dir, task, train_languages, target_languages, rank, lang, source, exclude)
-    
-    # print("finished training")
+    #     train_one(model_dir, task, train_languages, target_languages, rank, lang, source, exclude, distance)
+        
+    with open(defaults.GOLD_FILE.format(task=task, arch=arch), 'rb') as f:
+        rankings = pickle.load(f)
+    for lang in model_langs:
+        print("ranking language specific models")   
+        print(f"target language: {lang}")
+        target_languages = [lang]
+        train_languages= rankings[lang][0] # list of languages for looking up index in ranking vector
+        # gives position in ranking based on index (if ranking[0] = 4 then the 0th language [ranking_langs[0]] is the 5th best)
+        ranking = [list(rankings[lang][1])]
+        train_one(model_dir, task, train_languages, target_languages, ranking, lang, source, exclude, distance)
 
+    print("finished training")
+    print("predicting")
+    print(distance)
     predict_dir = "./results/" + defaults.FILE_EXTENSION.format(task = task, source = source, key = key, arch = arch)
-    # if not os.path.exists(predict_dir): 
-    #         os.makedirs(predict_dir) 
-    # predict(predict_dir, arch, task, distance, source, exclude)
+    if not os.path.exists(predict_dir): 
+            os.makedirs(predict_dir) 
+    predict(predict_dir, arch, task, distance, source, exclude)
 
     print("finished predicting")
     score = save_ndcg(task, arch, predict_dir)
+ 
     print("finished ranking")
     with open(defaults.RESULTS_PATH, "a") as f:
-        f.write("\t".join([task, key, source, str(distance), arch]) + f"\t{score}\n")
-
+        f.write("\t".join([task, key, source, str(distance), arch]) + f"\t{score}")
+        if not exclude==[]:
+            norm = NUM_FEATS - len(exclude)
+            norm_score = float(score)/norm
+            f.write(f"\t{norm_score}")
+        f.write("\n")
     
 if __name__ == "__main__":
    main(sys.argv[1:])

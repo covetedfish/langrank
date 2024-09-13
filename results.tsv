@@ -1,5 +1,46 @@
-POS	full	syntax_grambank	False	0.8082304508111341
-POS	full	syntax_knn	False	xpos	0.4157862949007731
-POS	full	syntax_knn	False	mtt	0.31642923660612365
-POS	full	syntax_knn	False	xpos	0.4157862949007731
-POS	full	syntax_knn	False	mtt	0.31642923660612365
+POS	dist	syntax_knn	True	stanza	0.38959355678660784
+POS	dist	syntax_knn	True	xlmr	0.5644510848430706
+
+POS	full	syntax_knn	False	stanza	0.5870305207236508
+POS	full	syntax_knn	False	xlmr	0.6337322205598822
+
+POS	full	syntax_grambank	False	stanza	0.5750161093949717
+POS	full	syntax_grambank	False	xlmr	0.6619651031106012
+
+
+POS	full	both	False	xlmr	0.5553536908439346
+POS	full	both	False	stanza	0.4632896630529395
+
+POS	full	None	False	stanza	0.4632896630529395
+POS	full	None	False	xlmr	0.5553536908439346
+
+POS	full	syntax_grambank	False	stanza	0.5750161093949717
+POS	class	syntax_grambank	False	stanza	0.5877752030247203	0.005997706153313472
+POS	deixis	syntax_grambank	False	stanza	0.6460984179666188	0.006212484788140566
+POS	verb complex	syntax_grambank	False	stanza	0.5750161093949717	0.005134072405312247
+POS	VP (other)	syntax_grambank	False	stanza	0.6085640668989961	0.0056875146439158515
+POS	number	syntax_grambank	False	stanza	0.6090308618880795	0.006278668679258552
+POS	TAME	syntax_grambank	False	stanza	0.5947859086150846	0.005831234398187104
+POS	quantification	syntax_grambank	False	stanza	0.5898374335146543	0.005266405656380842
+POS	valency	syntax_grambank	False	stanza	0.583815105831259	0.005405695424363509
+POS	argument marking (core)	syntax_grambank	False	stanza	0.6651252873651087	0.006786992728215395
+POS	argument marking (non-core)	syntax_grambank	False	stanza	0.6393331604616003	0.006267972161388238
+
+POS	full	syntax_grambank	False	xlmr	0.6619651031106012
+POS	class	syntax_grambank	False	xlmr	0.6934508301246917	0.0070760288788233846
+POS	deixis	syntax_grambank	False	xlmr	0.6859163464279131	0.00659534948488378
+POS	verb complex	syntax_grambank	False	xlmr	0.6619651031106012	0.005910402706344653
+POS	VP (other)	syntax_grambank	False	xlmr	0.7016449641556256	0.006557429571547903
+POS	number	syntax_grambank	False	xlmr	0.7004352393449191	0.007220981848916692
+POS	TAME	syntax_grambank	False	xlmr	0.6747504931104866	0.006615200912847908
+POS	quantification	syntax_grambank	False	xlmr	0.654897414402906	0.00584729834288309
+POS	valency	syntax_grambank	False	xlmr	0.6708736754044928	0.006211793290782341
+POS	argument marking (core)	syntax_grambank	False	xlmr	0.6872071555375586	0.0070123179136485575
+POS	argument marking (non-core)	syntax_grambank	False	xlmr	0.7304898946445656	0.007161665633770251
+
+
+POS	argument marking (non-core)	syntax_grambank	False	xlmr	0.7304898946445656	0.007161665633770251
+POS	argument marking (non-core)	syntax_grambank	False	xlmr	0.7304898946445656	0.007161665633770251
+
+
+POS	full	syntax_grambank	False	stanza	1.0

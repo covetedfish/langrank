@@ -7,6 +7,7 @@ from sklearn.datasets import load_svmlight_file
 import pandas as pd
 import pickle
 from iso639 import Lang
+import defaults as defaults
 
 TASKS = ["MT","DEP","EL","POS"]
 PREFIXES = {"MT": "ted_", "DEP": "conll_", "EL":"wiki_en-", "POS": "datasets/pos/"}
@@ -212,7 +213,6 @@ def prepare_featureset(lang, task="MT"):
 	for dt in datasets_dict:
 		fn = pkg_resources.resource_filename(__name__, os.path.join('indexed', task, datasets_dict[dt]))
 		features = np.load(fn, encoding='latin1', allow_pickle=True).item()
-	
 	# if task != "EL":
 	# 	features["dataset_size"] = len(source_lines)
 	# 	tokens = [w for s in source_lines for w in s.strip().split()]
@@ -248,7 +248,7 @@ def prepare_featureset(lang, task="MT"):
 
 	return features
 
-#assumes that every language we are ranking is one of the test languages (seems to be no way to incorporate a second index so why are there more ranking languages than test languages in the gold data)
+#Now allows for more target languages than train languages... should revisit training
 def prepare_train_pickle_no_data(train_langs, target_langs, rank, task="MT", tmp_dir="tmp", distances = True, exclude = [], source = "syntax_knn"):
 	"""
 	dataset: [ted_aze, ted_tur, ted_ben] 
@@ -265,20 +265,25 @@ def prepare_train_pickle_no_data(train_langs, target_langs, rank, task="MT", tmp
 		rank = np.array(rank)
 	BLEU_level = -rank + len(train_langs) #invert rankings (lower score is worse)
 	rel_BLEU_level = lgbm_rel_exp(BLEU_level, REL_EXP_CUTOFF) #limit rankings to 1-cutoff
-	# target_features = {lang: prepare_featureset(lang, task) for lang in target_langs}
-	# for lang in list(target_features.keys()): 
-	# 	if target_features[lang] == []:
-	# 		del target_features[lang]
-	# train_features = {lang: prepare_featureset(lang, task) for lang in train_langs}
-	# for lang in list(train_features.keys()): 
-	# 	if train_features[lang] == []:
-	# 		del train_features[lang]
+	target_features = {lang: prepare_featureset(lang, task) for lang in target_langs}
+	
+	#check if we have precomputed features available for all target languages
+	#we won't actually use these features because they are all dataset dependent (we only care about uriel)
+	#but it helps to check if there are uriel distances precomputed because otherwise lang2vec will cry about it
+	for lang in list(target_features.keys()): 
+		if target_features[lang] == []:
+			del target_features[lang]
+
+	train_features = {lang: prepare_featureset(lang, task) for lang in train_langs}
+	#check if we have precomputed features available for all train languages 
+	for lang in list(train_features.keys()): 
+		if train_features[lang] == []:
+			del train_features[lang]
+
 	# all_langs = list(set(target_features.keys()).union(set(train_features.keys())))
-	all_langs = list(set(target_langs).union(set(train_langs)))
-	if distances:
-		uriel = uriel_distance_vec(all_langs)
-	else:
-		uriel = uriel_feat_vec(all_langs)
+	all_langs = list(set(target_langs).union(set(train_langs))) # sets up a common index for uriel
+	
+	uriel = uriel_feat_vec(all_langs, distances)
 		
 	if not os.path.exists(tmp_dir):
 		os.mkdir(tmp_dir)
@@ -297,29 +302,28 @@ def prepare_train_pickle_no_data(train_langs, target_langs, rank, task="MT", tmp
 		for lang2 in train_langs:
 			i = all_langs.index(lang1)
 			j = all_langs.index(lang2)
+			distance_feats = {} #NOT USING DATASET FEATS, would ordinarily be include those "train_features" from earlier
 			if i != j:
 				count+=1
 				if len(all_langs) == 2:
-					uriel_features = [u for u in uriel] 
+					uriel_features = uriel
 				else:
-					syntax_features = l2v.get_feature_match_dict([lang1, lang2], source, exclude)
-					uriel_features = {u: uriel[u][i, j] for u in uriel.keys()} # gets uriel distances for each distance in uriel
-				distance_feats = {} #NOT USING DATASET FEATS
-				# distance_feats = distance_feat_dict(target_features[lang1], train_features[lang2], task)
+					uriel_features = {u: uriel[u][i, j] for u in uriel.keys()} # gets uriel distances for each distance type in uriel
+				
 				distance_feats.update(uriel_features)
-				distance_feats.update(syntax_features)
+				#if we are using the full feature set (whole syntax vector) we want to add those features in
+
+				if distances == False:
+					syntax_features = l2v.get_feature_match_dict([lang1, lang2], source, exclude)
+					if not syntax_features == None:
+						distance_feats.update(syntax_features)
 				if not train_data is None:
 					train_data = pd.concat([train_data, pd.DataFrame([distance_feats])], ignore_index=True)
 				else:
 					train_data = pd.DataFrame([distance_feats])
 				score = str(rel_BLEU_level[target_langs.index(lang1), train_langs.index(lang2)])
 				scores.append(score)
-		print(f"writing {count} to train_size") 
 		train_size_f.write(f"{count}\n")
-	print(f"i=j {count} times")
-	print(f"shape of train_data: {train_data.shape}")
-	print(f"length of train labels: {len(train_data)}")
-	print(f"number of target languages * number of train languages: {str(train_len*test_len)}")
 	pickle.dump(train_data, train_file_f)
 	pickle.dump(scores, train_labels_f)
 	train_file_f.close()
@@ -327,7 +331,7 @@ def prepare_train_pickle_no_data(train_langs, target_langs, rank, task="MT", tmp
 	print("Dump train file to {} ...".format(train_file_f))
 	print("Dump train size file to {} ...".format(train_size_f))
 
-def uriel_feat_vec(languages): 
+def uriel_feat_vec(languages, distance): 
 	# print('...grambank')
 	# grambank = l2v.get_features(languages, "syntax_grambank")
 	print('...geographic')
@@ -345,6 +349,10 @@ def uriel_feat_vec(languages):
 				   "phonological" : phonological, 
 				   "inventory": inventory, 
 				   "geographic": geographic}
+	if distance:
+		print('...syntactic')
+		syntax = l2v.syntactic_distance(languages)
+		uriel_features["syntactic"] = syntax
 	return uriel_features
 
 def uriel_distance_vec(languages):
@@ -446,6 +454,8 @@ def distance_vec(test, transfer, uriel_features, task):
 
 def lgbm_rel_exp(BLEU_level, cutoff):
 	if isinstance(BLEU_level, np.ndarray):
+		# if BLEU_level[i,j] - cutoff +1 >= cutoff leave it be. Else, set value equal to 0
+		a = np.where(BLEU_level >= cutoff, BLEU_level - cutoff + 1, 0)
 		return np.where(BLEU_level >= cutoff, BLEU_level - cutoff + 1, 0)
 	else:
 		return BLEU_level - cutoff + 1 if BLEU_level >= cutoff else 0
@@ -457,19 +467,23 @@ def prepare_train_file_no_data(langs, rank, task="MT", tmp_dir="tmp"):
 	rank: [[0, 1, 2], [1, 0, 2], [1, 2, 0]]
 	"""
 	num_langs = len(langs)
+	print(f"initial number of langs {len(langs)}")
+
 	REL_EXP_CUTOFF = num_langs - 1 - 9
 
 	if not isinstance(rank, np.ndarray):
 		rank = np.array(rank)
-	BLEU_level = -rank + len(langs)
+	BLEU_level = -rank + num_langs
+	print(BLEU_level.shape)
 	rel_BLEU_level = lgbm_rel_exp(BLEU_level, REL_EXP_CUTOFF)
-	# features = {lang: prepare_featureset(lang, task) for lang in langs}
-	# for lang in list(features.keys()): #stupid ass POS target languages aren't in the data??????
-	# 	if features[lang] == []:
-	# 		print(f"deleting {lang}")
-	# 		del features[lang]
-	# langs = list(features.keys())
-	uriel = uriel_distance_vec(langs)
+	features = {lang: prepare_featureset(lang, task) for lang in langs}
+	for lang in list(features.keys()): #stupid ass POS target languages aren't in the data??????
+		if features[lang] == []:
+			print(f"deleting {lang}")
+			del features[lang]
+	langs = list(features.keys())
+	print(f"number of langs {len(langs)}")
+	uriel = uriel_distance_vec(langs) 
 	if not os.path.exists(tmp_dir):
 		os.mkdir(tmp_dir)
 
@@ -483,10 +497,11 @@ def prepare_train_file_no_data(langs, rank, task="MT", tmp_dir="tmp"):
 				if len(langs) == 2:
 					uriel_features = [u for u in uriel]
 				else:
-					uriel_features = [u[i, j] for u in uriel]
-				distance_vec = np.array(uriel_features)
+					uriel_features = [u[i, j] for u in uriel] # a list of all uriel distance measures for language pair i, j
+				distance_vector = np.array(uriel_features) # turn the list into an array (why?)
 				# distance_vector = distance_vec(features[lang1], features[lang2], uriel_features, task)
 				distance_vector = ["{}:{}".format(i, d) for i, d in enumerate(distance_vector)]
+				print(f"i:{i}, j: {j}")
 				line = " ".join([str(rel_BLEU_level[i, j])] + distance_vector)
 				train_file_f.write(line + "\n")
 		train_size_f.write("{}\n".format(num_langs-1))
@@ -499,7 +514,8 @@ def prepare_train_file_no_data(langs, rank, task="MT", tmp_dir="tmp"):
 def prepare_train_file(datasets, langs, rank, segmented_datasets=None, task="MT", tmp_dir="tmp"):
 	"""
 	dataset: [ted_aze, ted_tur, ted_ben]
-	lang: [aze, tur, ben]
+	lang: [aze, tur, ben] #functions as a sort of index; could we not have 2 indices? 
+	one for target languages and one for transfer languages
 	rank: [[0, 1, 2], [1, 0, 2], [1, 2, 0]]
 	"""
 	num_langs = len(langs) 
@@ -562,24 +578,17 @@ def train_from_pickle(tmp_dir, output_model):
 	train_size = os.path.join(tmp_dir, "train_size.csv")
 	X_train = pickle.load(open(train_file, "rb"))
 	y_train = pickle.load(open(label_file, "rb"))
+	group = np.loadtxt(train_size, ndmin=1)
 	print(f"shape of train data loaded in: {X_train.shape}")
 	print(f"length of train data loaded in: {len(y_train)}")
 	model = lgb.LGBMRanker(boosting_type='gbdt', num_leaves=16,
 						   max_depth=-1, learning_rate=0.1, n_estimators=100,
 						   min_child_samples=5)
-	model.fit(X_train, y_train, group=np.loadtxt(train_size))
+	model.fit(X_train, y_train, group=group)
 	model.booster_.save_model(output_model)
 
 
-def train(tmp_dir, output_model):
-	train_file = os.path.join(tmp_dir, "train.csv")
-	train_size = os.path.join(tmp_dir, "train_size.csv")
-	X_train, y_train = load_svmlight_file(train_file)
-	model = lgb.LGBMRanker(boosting_type='gbdt', num_leaves=16,
-						   max_depth=-1, learning_rate=0.1, n_estimators=100,
-						   min_child_samples=5)
-	model.fit(X_train, y_train, group=np.loadtxt(train_size))
-	model.booster_.save_model(output_model)
+
 
 
 def rank(test_lang, task="MT", candidates="all", model="best", print_topK=3, distances = True, exclude = [], source = "syntax_knn", return_langs = True):
@@ -595,55 +604,63 @@ def rank(test_lang, task="MT", candidates="all", model="best", print_topK=3, dis
 	else:
 		# Restricts to a specific set of languages
 		candidate_list = get_candidates(task, candidates)
-	candidate_list = [cand for cand in candidate_list if not cand == test_lang] # do not consider target lang in ranking
+	# candidate_list = [cand for cand in candidate_list if not cand == test_lang] # do not consider target lang in ranking
 	print(f"cand list len: {len(candidate_list)}")
-	features = {cand[1]['lang']: cand[1] for cand in candidate_list }
+	# features = {cand[1]['lang']: cand[1] for cand in candidate_list }
 	print("Collecting URIEL distance vectors...")
 	languages = [test_lang] + [c[1]["lang"] for c in candidate_list]
 	# TODO: This takes forever...
-	if distances:
-		uriel = uriel_distance_vec(languages)
-	else:
-		uriel = uriel_feat_vec(languages)
+	uriel = uriel_feat_vec(languages, distances)
 	print("Collecting dataset distance vectors...")
-	if distances:
-		test_inputs = []
-		for i,c in enumerate(candidate_list):
-			key = c[0]
-			cand_dict = c[1]
-			candidate_language = Lang(cand_dict['lang']).pt3
-			uriel_j = [u[0,i+1] for u in uriel]
-			distance_vector = np.aray(uriel_j)
-			# distance_vector = distance_vec(test_dataset_features, cand_dict, uriel_j, task) #what does this actually return?
-			test_inputs.append(distance_vector)
-	else:
-		print("Collecting dataset distance vectors...")
-		test_inputs = []
-		test_data = None
-		for i,c in enumerate(candidate_list):
-			key = c[0]
-			cand_dict = c[1]
-			candidate_language = Lang(cand_dict['lang']).pt3
+	# if distances:
+	# 	test_inputs = []
+	# 	for i,c in enumerate(candidate_list):
+	# 		key = c[0]
+	# 		cand_dict = c[1]
+	# 		candidate_language = Lang(cand_dict['lang']).pt3
+	# 		uriel_j = [u[0,i+1] for u in uriel]
+	# 		distance_vector = np.array(uriel_j)
+	# 		# distance_vector = distance_vec(test_dataset_features, cand_dict, uriel_j, task) #what does this actually return?
+	# 		test_inputs.append(distance_vector)
+	# else:
+	print("Collecting dataset distance vectors...")
+	test_inputs = []
+	test_data = None
+	for i,c in enumerate(candidate_list):
+		key = c[0]
+		cand_dict = c[1]
+		candidate_language = Lang(cand_dict['lang']).pt3
+		uriel_features = {u: uriel[u][0, i+1] for u in uriel.keys()} # 0 because test lang is the 0th row
+		distance_feats = {} #NOT USING DATASET FEAT
+		# distance_feats = distance_feat_dict(test_dataset_features, features[candidate_language], task)
+		distance_feats.update(uriel_features)
+		if not distances:
 			syntax_features = l2v.get_feature_match_dict([test_lang, candidate_language], source, exclude)
-			uriel_features = {u: uriel[u][0, i+1] for u in uriel.keys()} # 0 because test lang is the 0th row
-			distance_feats = {} #NOT USING DATASET FEAT
-			# distance_feats = distance_feat_dict(test_dataset_features, features[candidate_language], task)
-			distance_feats.update(uriel_features)
-			distance_feats.update(syntax_features)
-			if not test_data is None:
-				test_data = pd.concat([test_data, pd.DataFrame([distance_feats])], ignore_index=True)
-			else:
-				test_data = pd.DataFrame([distance_feats])
+			if not syntax_features == None:
+				distance_feats.update(syntax_features)
+		if not test_data is None:
+			test_data = pd.concat([test_data, pd.DataFrame([distance_feats])], ignore_index=True)
+		else:
+			test_data = pd.DataFrame([distance_feats])
 
 	
-	# rank
+	# # rank
 	bst = lgb.Booster(model_file=model)
+	fname = f"{defaults.RESULTS_DIR}/importance/single_target/{test_lang}_stanza_{source}.tsv"
+	importance_df = (
+    pd.DataFrame({
+        'feature_name': bst.feature_name(),
+        'importance_gain': bst.feature_importance(importance_type='gain'),
+        'importance_split': bst.feature_importance(importance_type='split'),
+    })
+    .sort_values('importance_gain', ascending=False)
+    .reset_index(drop=True)
+	)
+	importance_df.to_csv(fname, sep='\t', index=False, header=False)
+
 	print(f"test input size {test_data.shape}")
 	print("predicting...")
-	if distances:
-		predict_contribs = bst.predict(test_inputs, pred_contrib=True)
-	else:
-		predict_contribs = bst.predict(test_data, pred_contrib=True)
+	predict_contribs = bst.predict(test_data, pred_contrib=True)
 	predict_scores = predict_contribs.sum(-1)
 	
 
