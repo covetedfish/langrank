@@ -312,14 +312,21 @@ def prepare_train_pickle_no_data(train_langs, target_langs, rank, task="MT", tmp
 				
 				distance_feats.update(uriel_features)
 				#if we are using the full feature set (whole syntax vector) we want to add those features in
-
+				# distance_feats = {}
 				if distances == False:
+					print('...inventory')
+					inventory = l2v.get_feature_match_dict([lang1, lang2], "inventory_knn", exclude)
+					print('...phonological')
+					phonological = l2v.get_feature_match_dict([lang1, lang2], "phonology_knn", exclude)
 					syntax_features = l2v.get_feature_match_dict([lang1, lang2], source, exclude)
+					distance_feats.update(inventory)
+					distance_feats.update(phonological)
 					if not syntax_features == None:
 						distance_feats.update(syntax_features)
 				if not train_data is None:
 					train_data = pd.concat([train_data, pd.DataFrame([distance_feats])], ignore_index=True)
 				else:
+					print(len(distance_feats))
 					train_data = pd.DataFrame([distance_feats])
 				score = str(rel_BLEU_level[target_langs.index(lang1), train_langs.index(lang2)])
 				scores.append(score)
@@ -338,21 +345,23 @@ def uriel_feat_vec(languages, distance):
 	geographic = l2v.geographic_distance(languages)
 	print('...genetic')
 	genetic = l2v.genetic_distance(languages)
-	print('...inventory')
-	inventory = l2v.inventory_distance(languages)
-	print('...phonological')
-	phonological = l2v.phonological_distance(languages)
-	print('...featural')
-	featural = l2v.featural_distance(languages)
-	uriel_features = {"genetic": genetic, 
-				   "featural": featural,
-				   "phonological" : phonological, 
-				   "inventory": inventory, 
-				   "geographic": geographic}
+	# print('...inventory')
+	# inventory = l2v.inventory_distance(languages)
+	# print('...phonological')
+	# phonological = l2v.phonological_distance(languages)
+	# print('...featural')
+	# featural = l2v.featural_distance(languages)
+	uriel_features = {"genetic": genetic, "geographic": geographic}
+	# uriel_features = {"genetic": genetic, 
+	# 			   "featural": featural,
+	# 			   "phonological" : phonological, 
+	# 			   "inventory": inventory, 
+	# 			   "geographic": geographic}
 	if distance:
 		print('...syntactic')
 		syntax = l2v.syntactic_distance(languages)
 		uriel_features["syntactic"] = syntax
+	# uriel_features = {}
 	return uriel_features
 
 def uriel_distance_vec(languages):
@@ -635,9 +644,14 @@ def rank(test_lang, task="MT", candidates="all", model="best", print_topK=3, dis
 		# distance_feats = distance_feat_dict(test_dataset_features, features[candidate_language], task)
 		distance_feats.update(uriel_features)
 		if not distances:
+			inventory = l2v.get_feature_match_dict([test_lang, candidate_language], "inventory_knn", exclude)
+			phonological = l2v.get_feature_match_dict([test_lang, candidate_language], "phonology_knn", exclude)
+			distance_feats.update(inventory)
+			distance_feats.update(phonological)
 			syntax_features = l2v.get_feature_match_dict([test_lang, candidate_language], source, exclude)
 			if not syntax_features == None:
 				distance_feats.update(syntax_features)
+	
 		if not test_data is None:
 			test_data = pd.concat([test_data, pd.DataFrame([distance_feats])], ignore_index=True)
 		else:
@@ -646,7 +660,7 @@ def rank(test_lang, task="MT", candidates="all", model="best", print_topK=3, dis
 	
 	# # rank
 	bst = lgb.Booster(model_file=model)
-	fname = f"{defaults.RESULTS_DIR}/importance/single_target/{test_lang}_stanza_{source}.tsv"
+	fname = f"{defaults.RESULTS_DIR}/importance/all_expanded/{test_lang}_xlmr_{source}.tsv"
 	importance_df = (
     pd.DataFrame({
         'feature_name': bst.feature_name(),

@@ -1,5 +1,5 @@
 #!/bin/bash
-for arch in "stanza"; do
+for arch in "xlmr"; do
     for dist in "False"; do
         for ablation in "None"; do
         # for ablation in "argument marking (non-core)"; do

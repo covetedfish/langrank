@@ -43,4 +43,11 @@ POS	argument marking (non-core)	syntax_grambank	False	xlmr	0.7304898946445656	0.
 POS	argument marking (non-core)	syntax_grambank	False	xlmr	0.7304898946445656	0.007161665633770251
 
 
-POS	full	syntax_grambank	False	stanza	1.0
+only typology
+POS	full	syntax_grambank	False	stanza	0.5953907710204378
+POS	full	syntax_grambank	False	xlmr	0.5988292852960138
+
+expanded phonology and inventory
+POS	full	syntax_grambank	False	xlmr	0.645410276073798
+POS	full	syntax_grambank	False	stanza	0.7475115166704521
+POS	full	syntax_grambank	False	xlmr	0.6454102760737979
