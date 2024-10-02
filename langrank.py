@@ -19,6 +19,11 @@ MT_DATASETS = {
 POS_DATASETS = {
 	"ud" : "ud.npy" 
 }
+
+NEW_POS_DATASETS = {
+	"ud" : "new_ud.npy" 
+}
+
 EL_DATASETS = {
 	"wiki" : "wiki.npy"
 }
@@ -61,11 +66,13 @@ def check_task_model_data(task, model, data):
 
 
 # utils
-def map_task_to_data(task):
+def map_task_to_data(task, arch = "orig"):
 	if task == "MT":
 		return MT_DATASETS
-	elif task == "POS":
+	elif task == "POS" and arch == "orig":
 		return POS_DATASETS
+	elif task == "POS" and (arch == "xlmr" or source == "stanza"):
+		return NEW_POS_DATASETS
 	elif task == "EL":
 		return EL_DATASETS
 	elif task == "DEP":
@@ -99,11 +106,11 @@ def read_vocab_file(fn):
 
 
 # used for ranking
-def get_candidates(task, languages=None):
+def get_candidates(task, languages=None, arch = "orig"):
 	if languages is not None and not isinstance(languages, list):
 		raise Exception("languages should be a list of ISO-3 codes")
 
-	datasets_dict = map_task_to_data(task)
+	datasets_dict = map_task_to_data(task, arch)
 	cands = []
 	for dt in datasets_dict:
 		fn = pkg_resources.resource_filename(__name__, os.path.join('indexed', task, datasets_dict[dt]))
@@ -127,8 +134,9 @@ def get_candidates(task, languages=None):
 			added = []
 			for c in cands:
 				if c[1]["lang"] not in added and c[1]["lang"] in add_languages and c[1]["lang"] not in sub_languages:
-					new_cands.append(c)
-					added.append(c[1]["lang"])
+					if  not ((arch == "xlmr" or arch == "stanza") and "target" in c[1]): 
+						new_cands.append(c)
+						added.append(c[1]["lang"])
 		else:
 			new_cands = [c for c in cands if c[1]["lang"] not in sub_languages]
 		print(f"len new_cands {len(new_cands)}")
@@ -207,49 +215,35 @@ def prepare_new_dataset(lang, task="MT", dataset_source=None, dataset_target=Non
 
 	return features
 
-def prepare_featureset(lang, task="MT"):
+def prepare_featureset(lang, task="MT", arch = "orig", target = True):
 	features = {}
-	datasets_dict = map_task_to_data(task)
+	datasets_dict = map_task_to_data(task, arch)
 	for dt in datasets_dict:
 		fn = pkg_resources.resource_filename(__name__, os.path.join('indexed', task, datasets_dict[dt]))
 		features = np.load(fn, encoding='latin1', allow_pickle=True).item()
-	# if task != "EL":
-	# 	features["dataset_size"] = len(source_lines)
-	# 	tokens = [w for s in source_lines for w in s.strip().split()]
-	# 	features["token_number"] = len(tokens)
-	# 	types = set(tokens)
-	# 	features["type_number"] = len(types)
-	# 	features["word_vocab"] = types
-	# 	features["type_token_ratio"] = features["type_number"]/float(features["token_number"])
-	# elif task == "EL":
-	# 	features["dataset_size"] = len(source_lines)
-	# 	tokens = [w for s in source_lines for w in s.strip().split()]
-	# 	types = set(tokens)
-	# 	features["word_vocab"] = types
 
-	code = (PREFIXES[task] + lang)
-	if not code in features:
-		code = PREFIXES[task] + Lang(lang).pt1
-	if task == "POS":
-		code = [a for a in list(features.keys()) if a.startswith(PREFIXES["POS"] + Lang(lang).pt1)]
-		if len(code) > 0:
-			code = code[0]
-	if (code == []) or (not code in features): 
-		return []
+	if arch == "orig":
+		code = (PREFIXES[task] + lang)
+		if not code in features:
+			code = PREFIXES[task] + Lang(lang).pt1
+		if task == "POS":
+			code = [a for a in list(features.keys()) if a.startswith(PREFIXES["POS"] + Lang(lang).pt1)]
+			if len(code) > 0:
+				code = code[0]
+		if (code == []) or (not code in features): 
+			return []
+	else:
+		if target:
+			code = f"{lang}_target"
+		else:
+			code = f"{lang}_transfer"
 	features = features[code]
-
-	# features["dataset_size"] = len(source_lines) # This should be be the same as above
-	# tokens = [w for s in source_lines for w in s.strip().split()]
-	# features["subword_token_number"] = len(tokens)
-	# types = set(tokens)
-	# features["subword_type_number"] = len(types)
-	# features["subword_vocab"] = types
-	# features["subword_type_token_ratio"] = features["subword_type_number"]/float(features["subword_token_number"])
-
 	return features
 
-#Now allows for more target languages than train languages... should revisit training
-def prepare_train_pickle_no_data(train_langs, target_langs, rank, task="MT", tmp_dir="tmp", distances = True, exclude = [], source = "syntax_knn"):
+#Prepares a train_data file consisting of feature comparison vectors between each target and transfer, 
+# scores corresponding to ranking for each transfer, and
+# train size corresponding to how many transfer languages make up the rankings for each target language
+def prepare_train_pickle_no_data(train_langs, target_langs, rank, task="MT", tmp_dir="tmp", distances = True, exclude = [], source = "syntax_knn", dataset = "False", arch = "orig"):
 	"""
 	dataset: [ted_aze, ted_tur, ted_ben] 
 	lang: [aze, tur, ben]
@@ -265,29 +259,33 @@ def prepare_train_pickle_no_data(train_langs, target_langs, rank, task="MT", tmp
 		rank = np.array(rank)
 	BLEU_level = -rank + len(train_langs) #invert rankings (lower score is worse)
 	rel_BLEU_level = lgbm_rel_exp(BLEU_level, REL_EXP_CUTOFF) #limit rankings to 1-cutoff
-	target_features = {lang: prepare_featureset(lang, task) for lang in target_langs}
+	target_features = {lang: prepare_featureset(lang, task, arch) for lang in target_langs}
 	
 	#check if we have precomputed features available for all target languages
 	#we won't actually use these features because they are all dataset dependent (we only care about uriel)
 	#but it helps to check if there are uriel distances precomputed because otherwise lang2vec will cry about it
 	for lang in list(target_features.keys()): 
 		if target_features[lang] == []:
+			print(f"deleting lang: {lang}")
 			del target_features[lang]
 
-	train_features = {lang: prepare_featureset(lang, task) for lang in train_langs}
+	train_features = {lang: prepare_featureset(lang, task, arch, False) for lang in train_langs}
+	#ATTENTION: this should not work. if we delete a train language then the rankings are all wonky
 	#check if we have precomputed features available for all train languages 
 	for lang in list(train_features.keys()): 
 		if train_features[lang] == []:
-			del train_features[lang]
+			raise(Exception("ERROR: all train languages should have URIEL features"))
 
 	# all_langs = list(set(target_features.keys()).union(set(train_features.keys())))
-	all_langs = list(set(target_langs).union(set(train_langs))) # sets up a common index for uriel
+	all_langs = list(set(target_langs).union(set(train_langs))) # sets up a common index for uriel lookups
 	
-	uriel = uriel_feat_vec(all_langs, distances)
+	uriel = uriel_feat_vec(all_langs, distances) #creates a matrix of uriel features for each possible language pair
 		
 	if not os.path.exists(tmp_dir):
 		os.mkdir(tmp_dir)
 	scores = []
+	#all this stuff saved to "{source}/{task}/{arch}/{key}/{dataset}"
+
 	train_data = None
 	train_file = os.path.join(tmp_dir, "train.pkl")
 	train_file_f = open(train_file, "wb")
@@ -295,42 +293,49 @@ def prepare_train_pickle_no_data(train_langs, target_langs, rank, task="MT", tmp
 	train_labels_f = open(train_labels, "wb")
 	train_size = os.path.join(tmp_dir, "train_size.csv")
 	train_size_f = open(train_size, "w")
+
 	train_len = len(train_features.keys())
 	test_len = len(target_features.keys())
 	for lang1 in target_langs:
 		count = 0
 		for lang2 in train_langs:
-			i = all_langs.index(lang1)
-			j = all_langs.index(lang2)
-			distance_feats = {} #NOT USING DATASET FEATS, would ordinarily be include those "train_features" from earlier
+			i = all_langs.index(lang1) #target language index for uriel lookup
+			j = all_langs.index(lang2) #transfer language index for uriel lookup
+			distance_feats = {} 
+			if dataset:
+				#if we are using dataset features, then compute a usable feature vector comparison between target and transfer
+				#dataset distance feats wil be a dictionary containing: word_overlap, transfer_dataset_size, task_data_size, ratio_dataset_size, transfer_ttr, 
+				# task_ttr, distance_ttr
+				distance_feats = distance_feat_dict(target_features[lang1], train_features[lang2], "POS")
+			# do not write training data for target == transfer
 			if i != j:
 				count+=1
 				if len(all_langs) == 2:
 					uriel_features = uriel
 				else:
 					uriel_features = {u: uriel[u][i, j] for u in uriel.keys()} # gets uriel distances for each distance type in uriel
-				
 				distance_feats.update(uriel_features)
 				#if we are using the full feature set (whole syntax vector) we want to add those features in
-				# distance_feats = {}
 				if distances == False:
-					print('...inventory')
 					inventory = l2v.get_feature_match_dict([lang1, lang2], "inventory_knn", exclude)
-					print('...phonological')
 					phonological = l2v.get_feature_match_dict([lang1, lang2], "phonology_knn", exclude)
+					#several options for syntax features so we feed source in here (both, none, syntax_knn, syntax, grambank)
+					#still questionable on the get_feature_match_dict
 					syntax_features = l2v.get_feature_match_dict([lang1, lang2], source, exclude)
 					distance_feats.update(inventory)
 					distance_feats.update(phonological)
+					#if we are not excluding sintax features. then we add them in here
 					if not syntax_features == None:
 						distance_feats.update(syntax_features)
 				if not train_data is None:
+					#each row represents the feature comparison between the target (lang1) and the transfer (lang2)
 					train_data = pd.concat([train_data, pd.DataFrame([distance_feats])], ignore_index=True)
 				else:
 					print(len(distance_feats))
 					train_data = pd.DataFrame([distance_feats])
-				score = str(rel_BLEU_level[target_langs.index(lang1), train_langs.index(lang2)])
-				scores.append(score)
-		train_size_f.write(f"{count}\n")
+				score = str(rel_BLEU_level[target_langs.index(lang1), train_langs.index(lang2)]) 
+				scores.append(score) #each score at index i corresponds to the feature comparison vector and index i of train_data
+		train_size_f.write(f"{count}\n") #keeps track of how many languages correspond to a single target (for processing train_data and scores)
 	pickle.dump(train_data, train_file_f)
 	pickle.dump(scores, train_labels_f)
 	train_file_f.close()
@@ -339,29 +344,26 @@ def prepare_train_pickle_no_data(train_langs, target_langs, rank, task="MT", tmp
 	print("Dump train size file to {} ...".format(train_size_f))
 
 def uriel_feat_vec(languages, distance): 
-	# print('...grambank')
-	# grambank = l2v.get_features(languages, "syntax_grambank")
+	# if distance is false, we only grab geographic and genetic distances (cannot be expanded)
 	print('...geographic')
 	geographic = l2v.geographic_distance(languages)
 	print('...genetic')
 	genetic = l2v.genetic_distance(languages)
-	# print('...inventory')
-	# inventory = l2v.inventory_distance(languages)
-	# print('...phonological')
-	# phonological = l2v.phonological_distance(languages)
-	# print('...featural')
-	# featural = l2v.featural_distance(languages)
 	uriel_features = {"genetic": genetic, "geographic": geographic}
-	# uriel_features = {"genetic": genetic, 
-	# 			   "featural": featural,
-	# 			   "phonological" : phonological, 
-	# 			   "inventory": inventory, 
-	# 			   "geographic": geographic}
+	#if we are using distances, we want to compute the remaining features here. If not, we will add them in later
 	if distance:
 		print('...syntactic')
 		syntax = l2v.syntactic_distance(languages)
 		uriel_features["syntactic"] = syntax
-	# uriel_features = {}
+		print('...inventory')
+		inventory = l2v.inventory_distance(languages)
+		uriel_features["inventory"] = inventory
+		print('...phonological')
+		phonological = l2v.phonological_distance(languages)
+		uriel_features["phonological"] = phonological
+		print('...featural')
+		featural = l2v.featural_distance(languages)
+		uriel_features["featural"] = featural
 	return uriel_features
 
 def uriel_distance_vec(languages):
@@ -580,7 +582,7 @@ def train(tmp_dir, output_model):
 	model.booster_.save_model(output_model)
 
 
-
+#loads in train files produced with prepare_train_pickle_no_data
 def train_from_pickle(tmp_dir, output_model):
 	train_file = os.path.join(tmp_dir, "train.pkl")
 	label_file = os.path.join(tmp_dir, "train_labels.pkl")
@@ -588,11 +590,11 @@ def train_from_pickle(tmp_dir, output_model):
 	X_train = pickle.load(open(train_file, "rb"))
 	y_train = pickle.load(open(label_file, "rb"))
 	group = np.loadtxt(train_size, ndmin=1)
-	print(f"shape of train data loaded in: {X_train.shape}")
-	print(f"length of train data loaded in: {len(y_train)}")
+	print(f"shape of train data loaded in: {X_train.shape}") # (target * (transfer-target), num feats)
+	print(f"length of train data loaded in: {len(y_train)}") #target * (transfer-target)
 	model = lgb.LGBMRanker(boosting_type='gbdt', num_leaves=16,
 						   max_depth=-1, learning_rate=0.1, n_estimators=100,
-						   min_child_samples=5)
+						   min_child_samples=5) #same ranking settings as langrank
 	model.fit(X_train, y_train, group=group)
 	model.booster_.save_model(output_model)
 
@@ -600,38 +602,27 @@ def train_from_pickle(tmp_dir, output_model):
 
 
 
-def rank(test_lang, task="MT", candidates="all", model="best", print_topK=3, distances = True, exclude = [], source = "syntax_knn", return_langs = True):
+def rank(test_lang, test_dataset_features = None, task="MT", candidates="all", model="best", print_topK=3, distances = True, exclude = [], source = "syntax_knn", return_langs = True, dataset = False, arch = "orig"):
 	'''
 	test_dataset_features : the output of prepare_new_dataset(). Basically a dictionary with the necessary dataset features.
 	'''
-	# Checks
 
 	# Get candidates to be compared against
+	#ATTENTION: NEEDS ALTERATION IF USING NEW DATASETS
 	print("Preparing candidate list...")
 	if candidates=='all':
-		candidate_list = get_candidates(task)
+		candidate_list = get_candidates(task, arch)
 	else:
 		# Restricts to a specific set of languages
-		candidate_list = get_candidates(task, candidates)
-	# candidate_list = [cand for cand in candidate_list if not cand == test_lang] # do not consider target lang in ranking
+		candidate_list = get_candidates(task, candidates, arch)
 	print(f"cand list len: {len(candidate_list)}")
-	# features = {cand[1]['lang']: cand[1] for cand in candidate_list }
+	#creates a dictionary where key= candidate language and value=dataset dependent feats
+	features = {cand[1]['lang']: cand[1] for cand in candidate_list }
 	print("Collecting URIEL distance vectors...")
 	languages = [test_lang] + [c[1]["lang"] for c in candidate_list]
 	# TODO: This takes forever...
 	uriel = uriel_feat_vec(languages, distances)
-	print("Collecting dataset distance vectors...")
-	# if distances:
-	# 	test_inputs = []
-	# 	for i,c in enumerate(candidate_list):
-	# 		key = c[0]
-	# 		cand_dict = c[1]
-	# 		candidate_language = Lang(cand_dict['lang']).pt3
-	# 		uriel_j = [u[0,i+1] for u in uriel]
-	# 		distance_vector = np.array(uriel_j)
-	# 		# distance_vector = distance_vec(test_dataset_features, cand_dict, uriel_j, task) #what does this actually return?
-	# 		test_inputs.append(distance_vector)
-	# else:
+	
 	print("Collecting dataset distance vectors...")
 	test_inputs = []
 	test_data = None
@@ -640,9 +631,13 @@ def rank(test_lang, task="MT", candidates="all", model="best", print_topK=3, dis
 		cand_dict = c[1]
 		candidate_language = Lang(cand_dict['lang']).pt3
 		uriel_features = {u: uriel[u][0, i+1] for u in uriel.keys()} # 0 because test lang is the 0th row
-		distance_feats = {} #NOT USING DATASET FEAT
-		# distance_feats = distance_feat_dict(test_dataset_features, features[candidate_language], task)
+		distance_feats = {} 
+		if dataset:
+			if not test_dataset_features:
+				raise Exception("precomputed dataset features for test input required to use dataset features")
+			distance_feats = distance_feat_dict(test_dataset_features, features[candidate_language], task)
 		distance_feats.update(uriel_features)
+
 		if not distances:
 			inventory = l2v.get_feature_match_dict([test_lang, candidate_language], "inventory_knn", exclude)
 			phonological = l2v.get_feature_match_dict([test_lang, candidate_language], "phonology_knn", exclude)
@@ -651,16 +646,22 @@ def rank(test_lang, task="MT", candidates="all", model="best", print_topK=3, dis
 			syntax_features = l2v.get_feature_match_dict([test_lang, candidate_language], source, exclude)
 			if not syntax_features == None:
 				distance_feats.update(syntax_features)
-	
+
 		if not test_data is None:
 			test_data = pd.concat([test_data, pd.DataFrame([distance_feats])], ignore_index=True)
 		else:
 			test_data = pd.DataFrame([distance_feats])
 
-	
+	#test_data should be of length = #candidate langs (train/transfer langs)
 	# # rank
 	bst = lgb.Booster(model_file=model)
-	fname = f"{defaults.RESULTS_DIR}/importance/all_expanded/{test_lang}_xlmr_{source}.tsv"
+	key =  "no-dataset"
+	if dataset: 
+		key = "dataset"
+	distance_key = "no-distance"
+	if distances:
+		distance_key = "distance"
+	fname = f"{defaults.RESULTS_DIR}/importance/{key}/{distance_key}/{test_lang}_{arch}_{source}.tsv"
 	importance_df = (
     pd.DataFrame({
         'feature_name': bst.feature_name(),

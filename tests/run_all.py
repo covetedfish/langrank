@@ -50,26 +50,18 @@ def read_ablations_dictionary(source, path = defaults.ABLATIONS_PATH):
     return cat_dict
 
 
-def train_one(dir_path, task, train_langs, target_langs, rank, test_lang, source, exclude, distances):
+def train_one(dir_path, task, train_langs, target_langs, rank, test_lang, source, exclude, distances, dataset, arch):
     print(f"target languages ranked (leave one out): {target_langs}")
     print(f"transfer languages {train_langs}")
     print(f"type of rank {type(rank)}")
 
 
-    prepare_train_pickle_no_data(train_langs=train_langs, target_langs=target_langs, rank=rank, tmp_dir=dir_path, task = task, distances = distances, source = source, exclude = exclude)
+    prepare_train_pickle_no_data(train_langs=train_langs, target_langs=target_langs, rank=rank, tmp_dir=dir_path, task = task, distances = distances, source = source, exclude = exclude, dataset = dataset, arch = arch)
     output_model = "{}/{}.txt".format(dir_path,test_lang)
     train_from_pickle(tmp_dir= dir_path, output_model=output_model)
     assert os.path.isfile(output_model)
 
-# def train_one_distances(dir_path, task, train_langs, target_langs, rank, test_lang):
-#     print(langs)
-#     prepare_train_pickle_no_data(train_langs=train_langs, target_langs=target_langs, rank=rank, tmp_dir=dir_path, task = task, distances = True, source = , exclude = exclude)
-#     output_model = "{}/{}.txt".format(dir_path,test_lang)
-#     train(tmp_dir= dir_path, output_model=output_model)
-#     assert os.path.isfile(output_model)
-
-
-def predict(predict_dir, arch, task, dist, source, exclude):
+def predict(predict_dir, arch, task, dist, source, exclude, dataset):
     with open(defaults.TRAIN_FILE.format(task=task, arch = arch), 'rb') as f:
         rankings = pickle.load(f)
     languages = list(rankings.keys())
@@ -79,9 +71,10 @@ def predict(predict_dir, arch, task, dist, source, exclude):
         lang_path = "{path}/{lang}.txt".format(path = model_path, lang = target_lang)
         print(lang_path)
         train_langs = list(rankings[target_lang][0])
-        # prepared = lr.prepare_featureset(lang=target_lang, task = task) #don't need if we exclude dataset dependent feats
-        print(dist)
-        predicted[target_lang] = lr.rank(test_lang = target_lang, task=task, candidates=train_langs, model = lang_path, distances = dist, source = source, exclude = exclude)
+        prepared = None
+        if dataset:
+            prepared = lr.prepare_featureset(lang=target_lang, task = task) #don't need if we exclude dataset dependent feats
+        predicted[target_lang] = lr.rank(test_lang = target_lang, test_dataset_features = prepared, task=task, candidates=train_langs, model = lang_path, distances = dist, source = source, exclude = exclude, arch = arch)
     pf = predict_dir + "/predictions.pkl"
     print(pf)
     with open(pf, 'wb') as f:
@@ -132,18 +125,20 @@ def save_ndcg(task, arch, predict_dir):
 
 
 @click.command()
-@click.option("-t", "--task", type=str, default="MT", help="NLP task")
-@click.option("-a", "--ablation", type=str, default= "Noe", help="feature set to remove")
-@click.option("-d", "--distance", type=bool, default=False, help="feature set to remove")
-@click.option("-s", "--source", type=str, default= "syntax_knn", help="syntax_knn or syntax_grambank or both")
-@click.option("-s", "--arch", type=str, default= "mtt", help="stanza or xpos")
+@click.option("-t", "--task", type=str, default="POS", help="NLP task")
+@click.option("-a", "--ablation", type=str, default= "None", help="feature set to remove")
+@click.option("-d", "--distance", type=bool, default=False, help="distance or no")
+@click.option("-s", "--source", type=str, default= "syntax_knn", help="syntax_knn or syntax_grambank both or none")
+@click.option("-s", "--arch", type=str, default= "", help="stanza xlmr or orig")
+@click.option("-a", "--dataset", type=str, default= False, help="use dataset features or no")
 
 def main(
     task,
     ablation,
     distance,
     source, 
-    arch
+    arch, 
+    dataset
 ):
     exclude = []
     t_file = defaults.TRAIN_FILE.format(arch = arch, task = task)
@@ -151,54 +146,43 @@ def main(
     with open(t_file, 'rb') as f:
         training= pickle.load(f)
 
-    ab = read_ablations_dictionary(source)
+    # ab = read_ablations_dictionary(source)
 
-    if ablation:
-        key = ablation
-        print(key)
-        exclude = ab[key]
-    else:
-        key = "dist" if distance == True else "full"
+    # if ablation:
+    #     key = ablation
+    #     print(key)
+    #     exclude = ab[key]
+    # else:
+    key = "dist" if distance == True else "full"
     
-    model_dir = "./models/" + defaults.FILE_EXTENSION.format(task = task, source = source, key = key, arch = arch)
+    model_dir = "./models/" + defaults.FILE_EXTENSION.format(task = task, source = source, key = key, arch = arch, dataset = dataset)
     if not os.path.exists(model_dir): 
         os.makedirs(model_dir) 
 
     model_langs = list(training.keys())
-    # model_langs = ["eng"]
-    # print(f"training {task} for ablation {key} from source {source}")
-    # for lang in model_langs:
-    #     print(lang)
-    #     target_languages = list(training[lang][1].keys()) #why did i format my data so weird!
-    #     train_languages = list(training[lang][0]) 
-    #     rank = list(training[lang][1].values())
-    #     train_one(model_dir, task, train_languages, target_languages, rank, lang, source, exclude, distance)
-        
-    with open(defaults.GOLD_FILE.format(task=task, arch=arch), 'rb') as f:
-        rankings = pickle.load(f)
+    print(f"training {task} for ablation {key} from source {source}")
     for lang in model_langs:
-        print("ranking language specific models")   
-        print(f"target language: {lang}")
-        target_languages = [lang]
-        train_languages= rankings[lang][0] # list of languages for looking up index in ranking vector
-        # gives position in ranking based on index (if ranking[0] = 4 then the 0th language [ranking_langs[0]] is the 5th best)
-        ranking = [list(rankings[lang][1])]
-        train_one(model_dir, task, train_languages, target_languages, ranking, lang, source, exclude, distance)
-
+        print(lang)
+        target_languages = list(training[lang][1].keys()) #why did i format my data so weird!
+        train_languages = list(training[lang][0]) 
+        rank = list(training[lang][1].values())
+        train_one(model_dir, task, train_languages, target_languages, rank, lang, source, exclude, distance, dataset, arch)
+        
+    
     print("finished training")
-    print("predicting")
+    print("now predicting")
     print(distance)
-    predict_dir = "./results/" + defaults.FILE_EXTENSION.format(task = task, source = source, key = key, arch = arch)
+    predict_dir = "./results/" + defaults.FILE_EXTENSION.format(task = task, source = source, key = key, arch = arch, dataset = dataset)
     if not os.path.exists(predict_dir): 
             os.makedirs(predict_dir) 
-    predict(predict_dir, arch, task, distance, source, exclude)
+    predict(predict_dir, arch, task, distance, source, exclude, dataset, arch)
 
     print("finished predicting")
     score = save_ndcg(task, arch, predict_dir)
  
     print("finished ranking")
     with open(defaults.RESULTS_PATH, "a") as f:
-        f.write("\t".join([task, key, source, str(distance), arch]) + f"\t{score}")
+        f.write("\t".join([task, key, source, str(distance), arch, str(dataset)]) + f"\t{score}")
         if not exclude==[]:
             norm = NUM_FEATS - len(exclude)
             norm_score = float(score)/norm

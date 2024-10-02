@@ -12,8 +12,8 @@
 ##SBATCH --partition=aa100
 #SBATCH --time=5:00:00
 #SBATCH --gres=gpu:1
-#SBATCH --error=logs/no_dist_gram.%j.err
-#SBATCH --out=logs/no_dist_gram.%j.out
+#SBATCH --error=logs/run_all_5.%j.err
+#SBATCH --out=logs/run_all_5.%j.out
 
 source /curc/sw/anaconda3/latest
 conda activate bankrank

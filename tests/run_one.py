@@ -23,6 +23,10 @@ def main():
             params["distance"] = False
         if params["distance"] == "True":
             params["distance"] = True
+        if params["dataset"] == "False":
+            params["dataset"] = False
+        if params["dataset"] == "True":
+            params["dataset"] = True
         run_experiment(**params)
     except json.JSONDecodeError as e:
         print(f"Error decoding JSON: {args.params}")

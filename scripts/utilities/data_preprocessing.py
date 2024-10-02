@@ -15,19 +15,28 @@ import sys
 current_dir = os.path.dirname(os.path.realpath(__file__))
 langrank_path = os.path.join(current_dir, '../../')
 sys.path.append(langrank_path)
-# importing
 import langrank as lr
- 
-FINAL_stanza = "./golds/stanza_scores_2000_all.csv"
+import defaults as defaults
+import gram2vec.lang2vec.lang2vec as l2v
 
-FINAL_XLMR = "./golds/xlmr_scores_2000_all.csv"
+'''
+removes non-grambank results from the original langrank golds
+'''
+def reorganize_langrank_rankings():
+    df = pd.read_csv(defaults.OLD_RAW)
+    gram = l2v.GRAMBANK_DISTANCE_LANGUAGES
+    gram.append("train/target")
+    print(gram)
+    df = df[df.columns.intersection(gram)]
+    df = df[df["train/target"].isin(gram) == True]
+    df.to_csv(defaults.GRAM_RAW, index = False)
 
 '''
 Reads the raw output from stanza training script
 returns a csv where column = target, row = train/source
 '''
 def reorganize_stanza_rankings():
-    df = pd.read_csv("/projects/enri8153/stanza/results_dev.csv")
+    df = pd.read_csv(defaults.STANZA_DEV)
     lang_train_values = df['transfer'].unique()
     lang_pred_values = df['target'].unique()
     reshaped_df = pd.DataFrame(columns=['lang_train'] + list(lang_pred_values))
@@ -45,13 +54,13 @@ def reorganize_stanza_rankings():
     # Display the reshaped dataframe
     df_clean = reshaped_df
     # df_clean = reshaped_df.map(lambda x: x.replace('%', ''))
-    # df_clean = df_clean.drop(columns=["jpn"])
+    df_clean = df_clean.drop(columns=["jpn"])
     df_clean = df_clean[~df_clean['train/target'].str.contains('jpn')]
 
-    df_clean.to_csv(FINAL_stanza, index = False)
+    df_clean.to_csv(defaults.FINAL_STANZA, index = False)
 
 def reorganize_xlmr_rankings():
-    df = pd.read_csv("../xpos/results.csv")
+    df = pd.read_csv(defaults.XPOS_DEV)
     # Get unique values of "lang_train" and "lang_pred"
     lang_train_values = df['lang_train'].unique()
     lang_pred_values = df['lang_pred'].unique()
@@ -73,7 +82,7 @@ def reorganize_xlmr_rankings():
     # Reset the index
     reshaped_df.reset_index(inplace=True)
     # Display the reshaped dataframe
-    reshaped_df.to_csv(FINAL_XLMR, index = False)
+    reshaped_df.to_csv(defaults.FINAL_XLMR, index = False)
 
 '''
 Reads output of reorganize_rankings
@@ -172,13 +181,13 @@ def align_and_remove_unique_rows(df1, df2, column_name="train/target"):
 Given two organized datasets (all iso codes of 3 letters with "train/test" in (0,0)) 
 reindex to match row and column order and save to file
 '''
-def match_mtt_xpos(xtt_path, xpos_path):
-    xtt = pd.read_csv(xtt_path)
-    xpos = pd.read_csv(xpos_path)
-    xtt, xpos = align_and_remove_unique_columns(xtt, xpos)
-    xtt, xpos = align_and_remove_unique_rows(xtt, xpos)
-    xtt.to_csv("./golds/aligned_xlmr.csv", index = False)
-    xpos.to_csv("./golds/aligned_stanza.csv", index = False)
+def match_data(a_path, b_path, aligned_a, aligned_b):
+    a = pd.read_csv(a_path)
+    b = pd.read_csv(b_path)
+    a, b = align_and_remove_unique_columns(a, b)
+    a, b = align_and_remove_unique_rows(a, b)
+    a.to_csv(aligned_a, index = False)
+    b.to_csv(aligned_b, index = False)
 
 '''
 For whatever reason, langrank includes languages in the raw data that are not actually present in their POS datasets. 
@@ -231,14 +240,14 @@ def numerical_rank(language, data):
 Given an organized dataset, returns 
 langs_ranked: a dictionary where 
 keys = language and 
-values = a tuple of indices, ranked where the ranking at index i of ranked corresponds to the language at index i of indices
+values = a tuple of (indices, ranked) where the ranking at index i of ranked corresponds to the language at index i of indices
 '''
 def make_golds(data, col_name = "train/target"):
     test = list(data.columns)[1:]
     langs_ranked = {}
     for language in test: 
         df = data.copy()
-        df = df.drop(data.loc[data[col_name].isin([language])].index) #for fairness, remove target language from potential training lanugages
+        df = df.drop(data.loc[data[col_name].isin([language])].index) #for fairness, remove target language from potential training languages
         indices = list(df[col_name])
         ranked = numerical_rank(language, df)
         langs_ranked[language] = (indices, ranked)
@@ -266,8 +275,8 @@ def make_ranked(data, target_lang, col_name = "train/target"):
 '''
 Given a language, task and an organized dataset, saves gold rankings and leave-one-out ranked training data to pickle 
 '''
-def make_data_pickles(data_path, data_dir, approach, training_dir = "./training-data/"):
-    data = pd.read_csv(data_dir + data_path)
+def make_data_pickles(data_path, approach, training_dir = "./training-data/"):
+    data = pd.read_csv(data_path)
     data = remove_no_data_langs(data)
     golds = make_golds(data)
     languages = list(data.columns)[1:]
@@ -347,7 +356,7 @@ def get_topk_training_languages(data , k=3):
 def main():
     reorganize_stanza_rankings()
     reorganize_xlmr_rankings()
-    stanza_path = FINAL_stanza
+    stanza_path = defaults.FINAL_STANZA
     target_list, transfer_list = find_empty_cells(stanza_path)
     if not target_list == []:
         with open("./resources/missing_trnsfr.txt", mode='wt', encoding='utf-8') as myfile:
@@ -363,13 +372,19 @@ def main():
             stanza.to_csv(f, index=False)
 
         #then align xlmr data to stanza
-        xlmr_path = FINAL_XLMR
+        xlmr_path = defaults.FINAL_XLMR
         convert_datafile_isos(xlmr_path)
-        match_mtt_xpos(xlmr_path, stanza_path)
+        match_data(xlmr_path, stanza_path, defaults.ALIGNED_XPOS, defaults.ALIGNED_STANZA)
+        
+        #then align original lstm data to new 
+        match_data(defaults.OLD_RAW, stanza_path, defaults.ALIGNED_ORIG, defaults.ALIGNED_STANZA_ORIG)
+        
         #then save the resultant rankings ot a langrank readable format
+        make_data_pickles(defaults.ALIGNED_XPOS, "xlmr")
+        make_data_pickles(defaults.ALIGNED_STANZA, "stanza")
 
-        make_data_pickles("aligned_xlmr.csv", "./golds/", "xlmr")
-        make_data_pickles("aligned_stanza.csv", "./golds/", "stanza")
+        reorganize_langrank_rankings()
+        make_data_pickles(defaults.GRAM_RAW, "orig")
 
         aligned_stanza = pd.read_csv("./golds/aligned_stanza.csv")
         with open("./golds/top_stanza.csv", mode='wt') as f:
